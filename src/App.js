@@ -402,8 +402,17 @@ const MusicMoodMatcher = () => {
         
         // Per il retry, prendi una canzone diversa dalla top 10
         const topTracks = tracks.slice(0, Math.min(10, tracks.length));
-        const randomIndex = Math.floor(Math.random() * topTracks.length);
-        const selectedTrack = topTracks[randomIndex];
+        // Filtra HUNTER/X anche qui per sicurezza
+        const filteredTracks = topTracks.filter(track => 
+          !track.artist.toLowerCase().includes('hunter')
+        );
+        
+        if (filteredTracks.length === 0) {
+          throw new Error('Nessuna canzone valida trovata');
+        }
+        
+        const randomIndex = Math.floor(Math.random() * filteredTracks.length);
+        const selectedTrack = filteredTracks[randomIndex];
         
         const explanation = generateExplanation(selectedTrack, answers, tags);
         const audioFeatures = getAudioFeaturesFromMood(answers);
