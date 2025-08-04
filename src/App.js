@@ -172,28 +172,11 @@ const MusicMoodMatcher = () => {
       
     } catch (error) {
       console.error('Errore nella Netlify Function:', error);
-      
-      console.log('🔄 Usando fallback locale...');
-      return getFallbackTracks();
+      throw error; // Rilancia l'errore invece di usare fallback
     }
   };
 
   // Fallback locale
-  const getFallbackTracks = () => {
-    const tracks = [
-      { name: "Blinding Lights", artist: "The Weeknd", url: "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b", popularity: 95 },
-      { name: "Levitating", artist: "Dua Lipa", url: "https://open.spotify.com/track/39LLxExYz6ewLAcYrzQQyP", popularity: 90 },
-      { name: "Good 4 U", artist: "Olivia Rodrigo", url: "https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG", popularity: 88 },
-      { name: "Stay", artist: "The Kid LAROI & Justin Bieber", url: "https://open.spotify.com/track/5PjdY0CKGZdEuoNab3yDmX", popularity: 87 },
-      { name: "Industry Baby", artist: "Lil Nas X & Jack Harlow", url: "https://open.spotify.com/track/27NovPIUIRrOZoCHxABJwK", popularity: 86 }
-    ];
-    
-    return tracks.map(track => ({
-      ...track,
-      score: Math.random() * 100 + track.popularity
-    })).sort((a, b) => b.score - a.score);
-  };
-
   // Audio features
   const getAudioFeaturesFromMood = (answers) => {
     let valence = 0.5, energy = 0.5, danceability = 0.5, tempo = 120;

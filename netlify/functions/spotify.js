@@ -195,17 +195,18 @@ exports.handler = async (event, context) => {
     
     let tracks = [];
     
-    // STRATEGIA 1: Recommendations API con genere specifico
+    // STRATEGIA 1: Recommendations API con parametri flessibili
     try {
       console.log('📡 Tentativo 1: Recommendations API...');
       
       const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams({
-        seed_genres: validGenres.slice(0, 2).join(','), // Max 2 seed genres
-        limit: 30,
-        target_valence: audioFeatures.valence,
-        target_energy: audioFeatures.energy,
-        target_danceability: audioFeatures.danceability,
-        min_popularity: 20
+        seed_genres: validGenres.slice(0, 3).join(','), // Max 3 seed genres per più varietà
+        limit: 50,
+        min_valence: Math.max(0, parseFloat(audioFeatures.valence) - 0.3),
+        max_valence: Math.min(1, parseFloat(audioFeatures.valence) + 0.3),
+        min_energy: Math.max(0, parseFloat(audioFeatures.energy) - 0.3),
+        max_energy: Math.min(1, parseFloat(audioFeatures.energy) + 0.3),
+        min_popularity: 10 // Più permissivo
       })}`;
       
       console.log('🔗 URL Recommendations:', recommendationsUrl);
@@ -240,22 +241,70 @@ exports.handler = async (event, context) => {
       console.log('❌ Recommendations error:', error.message);
     }
     
-    // STRATEGIA 2: Search API con genere specifico
+    // STRATEGIA 2: Recommendations API più permissiva (solo generi)
     if (tracks.length === 0) {
-      console.log('📡 Tentativo 2: Search API con genere...');
+      console.log('📡 Tentativo 2: Recommendations API permissiva...');
       
+      try {
+        const permissiveUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams({
+          seed_genres: validGenres.slice(0, 5).join(','), // Usa più generi
+          limit: 50,
+          min_popularity: 1 // Molto permissivo
+        })}`;
+        
+        const permissiveResponse = await fetch(permissiveUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (permissiveResponse.ok) {
+          const permissiveData = await permissiveResponse.json();
+          console.log(`🎵 Recommendations permissive trovate: ${permissiveData.tracks?.length || 0}`);
+          
+          if (permissiveData.tracks && permissiveData.tracks.length > 0) {
+            tracks = permissiveData.tracks.map(track => ({
+              name: track.name,
+              artist: track.artists[0].name,
+              url: track.external_urls.spotify,
+              image: track.album.images[1]?.url || track.album.images[0]?.url,
+              popularity: track.popularity,
+              id: track.id,
+              source: 'recommendations-permissive'
+            }));
+            console.log(`✅ SUCCESSO con Recommendations permissive: ${tracks.length} canzoni`);
+          }
+        }
+      } catch (error) {
+        console.log('❌ Recommendations permissive error:', error.message);
+      }
+    }
+    
+    // STRATEGIA 3: Search API con query multiple e creative
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 3: Search API con query multiple...');
+      
+      // Query più creative e variate
       const searchQueries = [
-        `genre:"${selectedGenre}"`,
-        `genre:${validGenres[0]}`,
+        `genre:"${selectedGenre}" year:2020-2024`,
+        `genre:"${validGenres[0]}" year:2015-2024`,
+        `genre:"${validGenres[1] || validGenres[0]}" year:2010-2024`,
+        `"${selectedGenre}" popular`,
+        `"${validGenres[0]}" trending`,
+        `"${validGenres[1] || validGenres[0]}" hits`,
         selectedGenre,
-        validGenres[0]
+        validGenres[0],
+        validGenres[1] || validGenres[0],
+        `${answers.mood} ${selectedGenre}`,
+        `${answers.activity} music`,
+        'popular music 2024',
+        'trending songs',
+        'top hits'
       ];
       
-      for (const query of searchQueries) {
+      for (const query of searchQueries.slice(0, 8)) { // Prova max 8 query
         try {
           console.log(`🔍 Cercando: "${query}"`);
           
-          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=30`;
+          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=50&market=US`;
           const searchResponse = await fetch(searchUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
@@ -289,28 +338,48 @@ exports.handler = async (event, context) => {
       }
     }
     
-    // STRATEGIA 3: Fallback generico
+    // STRATEGIA 4: Search ultra-generico (ultimo resort)
     if (tracks.length === 0) {
-      console.log('📡 Tentativo 3: Search generico...');
+      console.log('📡 Tentativo 4: Search ultra-generico...');
       
-      const fallbackQuery = 'popular music';
-      const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=20`;
-      const searchResponse = await fetch(searchUrl, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const ultraGenericQueries = [
+        'popular music',
+        'top songs',
+        'music',
+        'hits',
+        'songs',
+        'a' // Cerca letteralmente "a" - dovrebbe trovare migliaia di risultati
+      ];
       
-      if (searchResponse.ok) {
-        const searchData = await searchResponse.json();
-        tracks = searchData.tracks.items.map(track => ({
-          name: track.name,
-          artist: track.artists[0].name,
-          url: track.external_urls.spotify,
-          image: track.album.images[1]?.url || track.album.images[0]?.url,
-          popularity: track.popularity,
-          id: track.id,
-          source: 'fallback'
-        }));
-        console.log(`✅ Fallback: ${tracks.length} canzoni generiche`);
+      for (const query of ultraGenericQueries) {
+        try {
+          console.log(`🔍 Ultra-generic search: "${query}"`);
+          
+          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=50&market=US`;
+          const searchResponse = await fetch(searchUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (searchResponse.ok) {
+            const searchData = await searchResponse.json();
+            if (searchData.tracks.items.length > 0) {
+              tracks = searchData.tracks.items.map(track => ({
+                name: track.name,
+                artist: track.artists[0].name,
+                url: track.external_urls.spotify,
+                image: track.album.images[1]?.url || track.album.images[0]?.url,
+                popularity: track.popularity,
+                id: track.id,
+                source: `ultra-generic-${query}`
+              }));
+              console.log(`✅ Ultra-generic "${query}": ${tracks.length} canzoni`);
+              break;
+            }
+          }
+        } catch (error) {
+          console.log(`❌ Ultra-generic "${query}" error:`, error.message);
+          continue;
+        }
       }
     }
     
