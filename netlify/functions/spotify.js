@@ -1,776 +1,504 @@
-import React, { useState, useEffect } from 'react';
-import { Music, Brain, Heart, Play, RotateCcw, Sparkles, Headphones, ExternalLink, ChevronRight } from 'lucide-react';
+const fetch = require('node-fetch');
 
-const MusicMoodMatcher = () => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [answers, setAnswers] = useState({});
-  const [recommendation, setRecommendation] = useState(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showResult, setShowResult] = useState(false);
-  const [error, setError] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const [playlist, setPlaylist] = useState(null);
-  const [isGeneratingPlaylist, setIsGeneratingPlaylist] = useState(false);
+const SPOTIFY_CLIENT_ID = '6a5d13df3d304b8cb3413b54f1d151c9';
+const SPOTIFY_CLIENT_SECRET = '7ec729a1b84244398b228f38077bbe71';
 
-  const questions = [
-    {
-      id: 'mood',
-      question: "Come ti senti?",
-      subtitle: "Il tuo stato d'animo attuale",
-      emoji: "😊",
-      options: [
-        { value: 'happy', label: 'Felice', subtitle: 'Energico e positivo', emoji: '😄' },
-        { value: 'calm', label: 'Tranquillo', subtitle: 'Rilassato e sereno', emoji: '😌' },
-        { value: 'melancholic', label: 'Pensieroso', subtitle: 'Riflessivo e malinconico', emoji: '🤔' },
-        { value: 'motivated', label: 'Carico', subtitle: 'Motivato e determinato', emoji: '💪' },
-        { value: 'nostalgic', label: 'Nostalgico', subtitle: 'Ricordi e emozioni del passato', emoji: '✨' }
-      ]
-    },
-    {
-      id: 'activity',
-      question: "Cosa stai facendo?",
-      subtitle: "La tua attività attuale o pianificata",
-      emoji: "⚡",
-      options: [
-        { value: 'working', label: 'Focus', subtitle: 'Lavoro o studio', emoji: '💻' },
-        { value: 'relaxing', label: 'Relax', subtitle: 'Momento di pausa', emoji: '🛋️' },
-        { value: 'exercising', label: 'Sport', subtitle: 'Allenamento o movimento', emoji: '🏃‍♂️' },
-        { value: 'partying', label: 'Party', subtitle: 'Festa o socializzazione', emoji: '🎉' },
-        { value: 'walking', label: 'Viaggio', subtitle: 'Camminata o spostamento', emoji: '🚶‍♂️' }
-      ]
-    },
-    {
-      id: 'energy',
-      question: "La tua energia?",
-      subtitle: "Quanto ti senti attivo",
-      emoji: "🔋",
-      options: [
-        { value: 'high', label: 'Massima', subtitle: 'Voglio ballare e muovermi', emoji: '🚀' },
-        { value: 'medium', label: 'Bilanciata', subtitle: 'Ritmo moderato', emoji: '⚖️' },
-        { value: 'low', label: 'Soft', subtitle: 'Qualcosa di delicato', emoji: '🕯️' },
-        { value: 'variable', label: 'Mista', subtitle: 'Sorprendimi', emoji: '🎲' }
-      ]
-    },
-    {
-      id: 'time',
-      question: "Che momento è?",
-      subtitle: "Il tuo timing perfetto",
-      emoji: "🕐",
-      options: [
-        { value: 'morning', label: 'Mattina', subtitle: 'Iniziare con energia', emoji: '🌅' },
-        { value: 'afternoon', label: 'Pomeriggio', subtitle: 'Mantenere il ritmo', emoji: '☀️' },
-        { value: 'evening', label: 'Sera', subtitle: 'Rallentare dolcemente', emoji: '🌅' },
-        { value: 'night', label: 'Notte', subtitle: 'Atmosfera intima', emoji: '🌙' }
-      ]
-    },
-    {
-      id: 'genre',
-      question: "Che genere?",
-      subtitle: "Il tuo stile musicale oggi",
-      emoji: "🎼",
-      options: [
-        { value: 'electronic', label: 'Electronic', subtitle: 'EDM, House, Techno', emoji: '🎛️' },
-        { value: 'pop', label: 'Pop', subtitle: 'Mainstream e Radio Hits', emoji: '📻' },
-        { value: 'rock', label: 'Rock', subtitle: 'Alternative, Indie, Classic', emoji: '🎸' },
-        { value: 'hip-hop', label: 'Hip Hop', subtitle: 'Rap, R&B, Urban', emoji: '🎤' },
-        { value: 'jazz', label: 'Jazz', subtitle: 'Smooth, Fusion, Blues', emoji: '🎷' },
-        { value: 'classical', label: 'Classical', subtitle: 'Orchestra, Piano, Strings', emoji: '🎻' },
-        { value: 'indie', label: 'Indie', subtitle: 'Alternative, Folk, Acoustic', emoji: '🎪' },
-        { value: 'metal', label: 'Metal', subtitle: 'Heavy, Progressive, Alternative', emoji: '⚡' },
-        { value: 'reggae', label: 'Reggae', subtitle: 'Dub, Ska, Caribbean', emoji: '🌴' },
-        { value: 'country', label: 'Country', subtitle: 'Folk, Americana, Bluegrass', emoji: '🤠' },
-        { value: 'latin', label: 'Latin', subtitle: 'Salsa, Reggaeton, Bossa Nova', emoji: '💃' },
-        { value: 'ambient', label: 'Ambient', subtitle: 'Chill, Atmospheric, Lo-fi', emoji: '☁️' }
-      ]
+// Generi VALIDI per Spotify Recommendations API con audio features specifiche
+const genreProfiles = {
+  electronic: {
+    seeds: ['house', 'techno', 'electronic', 'edm', 'trance'],
+    searchTerms: ['electronic music', 'EDM', 'house music', 'techno', 'trance', 'dubstep'],
+    audioFeatures: {
+      min_energy: 0.6,
+      max_acousticness: 0.2,
+      min_danceability: 0.6,
+      min_tempo: 110,
+      max_tempo: 140,
+      max_instrumentalness: 0.8
     }
-  ];
-
-  // Mapping intelligente basato sul mood e contesto
-  const getMoodBasedTags = (answers) => {
-    const tagMappings = {
-      // Mood primario
-      happy: ['upbeat', 'energetic', 'positive', 'dance', 'feel good', 'uplifting'],
-      calm: ['chill', 'relaxing', 'peaceful', 'ambient', 'soft', 'meditation'],
-      melancholic: ['melancholy', 'sad', 'emotional', 'indie', 'introspective', 'slow'],
-      motivated: ['motivational', 'energetic', 'workout', 'powerful', 'driving', 'intense'],
-      nostalgic: ['nostalgic', 'retro', 'classic', 'vintage', '80s', '90s'],
-
-      // Attività
-      working: ['focus', 'concentration', 'instrumental', 'productivity', 'ambient'],
-      relaxing: ['chill', 'lounge', 'peaceful', 'soft', 'meditation'],
-      exercising: ['workout', 'high energy', 'motivational', 'pump up', 'intense'],
-      partying: ['party', 'dance', 'club', 'energetic', 'fun'],
-      walking: ['travel', 'journey', 'atmospheric', 'cinematic'],
-
-      // Energia
-      high: ['high energy', 'intense', 'fast', 'powerful', 'energetic'],
-      medium: ['moderate', 'balanced', 'steady', 'rhythmic'],
-      low: ['slow', 'gentle', 'soft', 'calm', 'peaceful'],
-      variable: ['dynamic', 'versatile', 'eclectic'],
-
-      // Tempo del giorno
-      morning: ['morning', 'fresh', 'awakening', 'positive', 'new day'],
-      afternoon: ['sunny', 'bright', 'active', 'productive'],
-      evening: ['sunset', 'golden hour', 'winding down', 'reflective'],
-      night: ['night', 'dark', 'intimate', 'deep', 'atmospheric'],
-
-      // Generi - ESPANSO con molti più generi
-      electronic: ['electronic', 'techno', 'house', 'edm', 'synth', 'trance', 'dubstep'],
-      pop: ['pop', 'mainstream', 'catchy', 'radio', 'top 40'],
-      rock: ['rock', 'alternative', 'indie rock', 'guitar', 'grunge', 'punk'],
-      'hip-hop': ['hip hop', 'rap', 'rnb', 'urban', 'trap', 'old school'],
-      jazz: ['jazz', 'smooth jazz', 'bebop', 'fusion', 'blues', 'swing'],
-      classical: ['classical', 'orchestra', 'piano', 'strings', 'baroque', 'romantic'],
-      indie: ['indie', 'alternative', 'folk', 'acoustic', 'singer-songwriter', 'lo-fi'],
-      metal: ['metal', 'heavy metal', 'progressive', 'death metal', 'black metal', 'metalcore'],
-      reggae: ['reggae', 'dub', 'ska', 'caribbean', 'dancehall', 'roots'],
-      country: ['country', 'folk', 'americana', 'bluegrass', 'western', 'honky tonk'],
-      latin: ['latin', 'salsa', 'reggaeton', 'bossa nova', 'tango', 'mariachi'],
-      ambient: ['ambient', 'experimental', 'atmospheric', 'soundscape', 'new age', 'drone']
-    };
-
-    let allTags = [];
-    Object.keys(answers).forEach(key => {
-      const answer = answers[key];
-      if (tagMappings[answer]) {
-        allTags = [...allTags, ...tagMappings[answer]];
-      }
-    });
-
-    return [...new Set(allTags)].slice(0, 5);
-  };
-
-  // Chiamata alla Netlify Function
-  const searchSpotify = async (tags, isPlaylistGeneration = false, seedTrack = '') => {
-    try {
-      console.log('📍 URL completo:', window.location.origin);
-      
-      const params = new URLSearchParams({
-        mood: answers.mood || 'happy',
-        activity: answers.activity || 'relaxing',
-        energy: answers.energy || 'medium',
-        time: answers.time || 'evening',
-        genre: answers.genre || 'pop',
-        tags: tags.join(','),
-        isPlaylist: isPlaylistGeneration ? 'true' : 'false',
-        seedTrack: seedTrack || ''
-      });
-      
-      const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
-      console.log('🔗 Chiamando:', apiUrl);
-      
-      const response = await fetch(apiUrl);
-      console.log('📊 Response status:', response.status);
-      console.log('📋 Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Response error:', errorText);
-        throw new Error(`Function error: ${response.status} - ${errorText}`);
-      }
-      
-      const responseText = await response.text();
-      console.log('📄 Response text (primi 200 char):', responseText.substring(0, 200));
-      
-      if (responseText.startsWith('<!DOCTYPE')) {
-        throw new Error('Ricevuto HTML invece di JSON - Function non trovata');
-      }
-      
-      const data = JSON.parse(responseText);
-      
-      if (data.tracks && data.tracks.length > 0) {
-        const uniqueTracks = data.tracks.filter((track, index, self) => 
-          index === self.findIndex(t => t.id === track.id)
-        ).map(track => ({
-          ...track,
-          score: Math.random() * 100 + (track.popularity || 50)
-        }));
-        
-        console.log(`🎵 === RISULTATO FINALE ${isPlaylistGeneration ? 'PLAYLIST' : 'ENHANCED'} ===`);
-        console.log(`🎵 Trovate ${uniqueTracks.length} tracce uniche`);
-        if (isPlaylistGeneration) console.log(`🎵 Seed track: ${seedTrack}`);
-        console.log({
-          totalTracks: uniqueTracks.length,
-          isPlaylist: isPlaylistGeneration,
-          seedTrack: seedTrack,
-          message: `Found ${uniqueTracks.length} tracks ${isPlaylistGeneration ? 'for playlist' : 'with enhanced genre precision'}`,
-          firstTrack: uniqueTracks[0] ? `${uniqueTracks[0].name} by ${uniqueTracks[0].artist}` : 'None'
-        });
-        
-        return uniqueTracks.sort((a, b) => b.score - a.score);
-      }
-      
-      throw new Error(`Nessuna ${isPlaylistGeneration ? 'playlist' : 'canzone'} trovata dalla function`);
-      
-    } catch (error) {
-      console.error(`Errore nella Netlify Function${isPlaylistGeneration ? ' (playlist)' : ''}:`, error);
-      
-      if (!isPlaylistGeneration) {
-        console.log('🔄 Usando fallback locale...');
-        return getFallbackTracks();
-      } else {
-        throw error;
-      }
+  },
+  
+  pop: {
+    seeds: ['pop', 'dance-pop', 'electropop', 'indie-pop'],
+    searchTerms: ['pop music', 'top hits', 'radio hits', 'mainstream pop'],
+    audioFeatures: {
+      min_energy: 0.4,
+      max_energy: 0.9,
+      min_danceability: 0.5,
+      min_valence: 0.4,
+      min_popularity: 40,
+      min_tempo: 90,
+      max_tempo: 130
     }
-  };
-
-  // Fallback locale
-  const getFallbackTracks = () => {
-    const fallbackTracks = [
-      { id: 'fallback1', name: 'Blinding Lights', artist: 'The Weeknd', url: 'https://open.spotify.com/track/0VjIjW4GlULA4LGvF2BoA2', popularity: 95, image: null },
-      { id: 'fallback2', name: 'Watermelon Sugar', artist: 'Harry Styles', url: 'https://open.spotify.com/track/6UelLqGlWMcVH1E5c4H7lY', popularity: 90, image: null },
-      { id: 'fallback3', name: 'Good 4 U', artist: 'Olivia Rodrigo', url: 'https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG', popularity: 88, image: null },
-      { id: 'fallback4', name: 'Levitating', artist: 'Dua Lipa', url: 'https://open.spotify.com/track/463CkQjx2Zk1yXoBuierM9', popularity: 92, image: null },
-      { id: 'fallback5', name: 'Stay', artist: 'The Kid LAROI & Justin Bieber', url: 'https://open.spotify.com/track/5PjdY0CKGZdEuoNab3yDmX', popularity: 89, image: null }
-    ];
-    
-    return fallbackTracks.map(track => ({
-      ...track,
-      score: Math.random() * 100 + track.popularity
-    })).sort((a, b) => b.score - a.score);
-  };
-
-  // Audio features
-  const getAudioFeaturesFromMood = (answers) => {
-    let valence = 0.5, energy = 0.5, danceability = 0.5, tempo = 120;
-    
-    switch (answers.mood) {
-      case 'happy': valence = 0.8; energy = 0.7; danceability = 0.8; tempo = 128; break;
-      case 'calm': valence = 0.6; energy = 0.3; danceability = 0.4; tempo = 95; break;
-      case 'melancholic': valence = 0.2; energy = 0.4; danceability = 0.3; tempo = 85; break;
-      case 'motivated': valence = 0.7; energy = 0.9; danceability = 0.6; tempo = 140; break;
-      case 'nostalgic': valence = 0.5; energy = 0.5; danceability = 0.5; tempo = 110; break;
+  },
+  
+  rock: {
+    seeds: ['rock', 'indie-rock', 'alternative', 'classic-rock'],
+    searchTerms: ['rock music', 'indie rock', 'alternative rock', 'guitar music'],
+    audioFeatures: {
+      min_energy: 0.5,
+      max_acousticness: 0.4,
+      min_loudness: -12,
+      max_danceability: 0.7,
+      min_tempo: 90,
+      max_tempo: 150
     }
-    
-    switch (answers.activity) {
-      case 'exercising': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 130); break;
-      case 'relaxing': energy = Math.max(0.1, energy - 0.4); tempo = Math.min(tempo, 90); break;
-      case 'partying': energy = Math.min(1.0, energy + 0.2); danceability = Math.min(1.0, danceability + 0.3); break;
-      case 'working': energy = Math.max(0.3, Math.min(0.7, energy)); danceability = Math.max(0.2, danceability - 0.2); break;
+  },
+  
+  'hip-hop': {
+    seeds: ['hip-hop', 'rap', 'trap'],
+    searchTerms: ['hip hop', 'rap music', 'trap music', 'urban music'],
+    audioFeatures: {
+      min_energy: 0.6,
+      min_speechiness: 0.3,
+      min_danceability: 0.6,
+      max_acousticness: 0.2,
+      min_tempo: 70,
+      max_tempo: 140
     }
-    
-    switch (answers.energy) {
-      case 'high': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 125); break;
-      case 'low': energy = Math.max(0.1, energy - 0.3); tempo = Math.min(tempo, 95); break;
-      case 'medium': energy = Math.max(0.4, Math.min(0.7, energy)); break;
+  },
+  
+  jazz: {
+    seeds: ['jazz', 'smooth-jazz', 'blues', 'swing'],
+    searchTerms: ['jazz music', 'smooth jazz', 'jazz fusion', 'contemporary jazz'],
+    audioFeatures: {
+      min_acousticness: 0.3,
+      max_danceability: 0.6,
+      min_instrumentalness: 0.2,
+      max_energy: 0.7,
+      min_tempo: 60,
+      max_tempo: 180
     }
-    
-    return {
-      valence: valence.toFixed(2),
-      energy: energy.toFixed(2),
-      danceability: danceability.toFixed(2),
-      tempo: Math.round(tempo)
-    };
-  };
-
-  const generateExplanation = (track, answers, tags) => {
-    const explanations = [];
-    
-    if (answers.mood === 'happy') {
-      explanations.push("Ho scelto questa canzone perché emana energia positiva");
-    } else if (answers.mood === 'calm') {
-      explanations.push("Questa traccia ha un ritmo rilassante perfetto per il tuo momento");
-    } else if (answers.mood === 'melancholic') {
-      explanations.push("Una canzone che abbraccia i tuoi pensieri");
-    } else if (answers.mood === 'motivated') {
-      explanations.push("Un brano che amplificherà la tua motivazione");
-    } else if (answers.mood === 'nostalgic') {
-      explanations.push("Questa canzone evoca dolci ricordi");
+  },
+  
+  classical: {
+    seeds: ['classical', 'piano', 'orchestra'],
+    searchTerms: ['classical music', 'orchestra', 'piano classical', 'symphony'],
+    audioFeatures: {
+      min_acousticness: 0.7,
+      max_danceability: 0.3,
+      min_instrumentalness: 0.5,
+      max_energy: 0.6,
+      max_loudness: -15,
+      min_tempo: 60,
+      max_tempo: 140
     }
-
-    if (answers.activity === 'working') {
-      explanations.push("ideale per mantenere la concentrazione");
-    } else if (answers.activity === 'exercising') {
-      explanations.push("perfetta per accompagnare il movimento");
-    } else if (answers.activity === 'partying') {
-      explanations.push("che farà scatenare tutti");
+  },
+  
+  indie: {
+    seeds: ['indie', 'indie-pop', 'indie-rock', 'indie-folk'],
+    searchTerms: ['indie music', 'independent music', 'indie folk', 'bedroom pop'],
+    audioFeatures: {
+      max_popularity: 70,
+      min_acousticness: 0.2,
+      max_danceability: 0.7,
+      min_valence: 0.3,
+      min_tempo: 80,
+      max_tempo: 130
     }
-
-    return explanations.join(' e ') + '.';
-  };
-
-  const findBestMatch = async () => {
-    try {
-      const tags = getMoodBasedTags(answers);
-      const tracks = await searchSpotify(tags);
-      
-      if (tracks.length === 0) {
-        throw new Error('Nessuna canzone trovata');
-      }
-
-      const totalTracks = tracks.length;
-      let selectedTrack;
-      
-      if (totalTracks === 1) {
-        selectedTrack = tracks[0];
-      } else if (totalTracks <= 5) {
-        const randomIndex = Math.floor(Math.random() * totalTracks);
-        selectedTrack = tracks[randomIndex];
-      } else {
-        const topTracks = tracks.slice(0, 15);
-        const weights = topTracks.map((_, index) => Math.pow(0.85, index));
-        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-        
-        let random = Math.random() * totalWeight;
-        let selectedIndex = 0;
-        
-        for (let i = 0; i < weights.length; i++) {
-          random -= weights[i];
-          if (random <= 0) {
-            selectedIndex = i;
-            break;
-          }
-        }
-        
-        selectedTrack = topTracks[selectedIndex];
-      }
-      
-      const explanation = generateExplanation(selectedTrack, answers, tags);
-      const audioFeatures = getAudioFeaturesFromMood(answers);
-      const popularityScore = selectedTrack.popularity || 50;
-      const confidence = Math.min(95, 70 + Math.floor(popularityScore / 5) + Math.floor(Math.random() * 15));
-
-      console.log(`🎯 Canzone Spotify selezionata: "${selectedTrack.name}" di ${selectedTrack.artist}`);
-
-      return {
-        ...selectedTrack,
-        reason: explanation,
-        tags: tags,
-        confidence: confidence,
-        audioFeatures: audioFeatures
-      };
-    } catch (error) {
-      console.error('Errore nella ricerca:', error);
-      throw error;
+  },
+  
+  metal: {
+    seeds: ['metal', 'heavy-metal', 'death-metal', 'black-metal'],
+    searchTerms: ['metal music', 'heavy metal', 'death metal', 'metalcore'],
+    audioFeatures: {
+      min_energy: 0.8,
+      min_loudness: -8,
+      max_acousticness: 0.1,
+      max_danceability: 0.6,
+      min_tempo: 120,
+      max_tempo: 200
     }
-  };
-
-  const generatePlaylist = async () => {
-    if (!recommendation) return;
-    
-    setIsGeneratingPlaylist(true);
-    try {
-      const tags = getMoodBasedTags(answers);
-      const playlistTracks = await searchSpotify(tags, true, recommendation.name);
-      
-      const filteredTracks = playlistTracks
-        .filter(track => track.id !== recommendation.id)
-        .slice(0, 9);
-      
-      const finalPlaylist = [recommendation, ...filteredTracks];
-      setPlaylist(finalPlaylist);
-      
-      console.log('🎵 Playlist generata:', finalPlaylist.length, 'tracce');
-    } catch (error) {
-      console.error('💥 === ERRORE FINALE ===');
-      console.error('Errore generazione playlist:', error);
-      setError('Errore nella generazione della playlist');
-    } finally {
-      setIsGeneratingPlaylist(false);
+  },
+  
+  reggae: {
+    seeds: ['reggae', 'ska', 'dub'],
+    searchTerms: ['reggae music', 'ska music', 'dub music', 'caribbean music'],
+    audioFeatures: {
+      min_danceability: 0.6,
+      max_energy: 0.7,
+      min_valence: 0.5,
+      min_tempo: 60,
+      max_tempo: 120
     }
-  };
-
-  const handleAnswer = (questionId, answer) => {
-    const newAnswers = { ...answers, [questionId]: answer };
-    setAnswers(newAnswers);
-
-    if (currentStep < questions.length - 1) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      setIsAnalyzing(true);
-      setError(null);
-      
-      setTimeout(async () => {
-        try {
-          const match = await findBestMatch();
-          setRecommendation(match);
-          setIsAnalyzing(false);
-          setShowResult(true);
-        } catch (err) {
-          setError('Qualcosa è andato storto. Riprova!');
-          setIsAnalyzing(false);
-        }
-      }, 2500);
+  },
+  
+  country: {
+    seeds: ['country', 'folk', 'americana', 'bluegrass'],
+    searchTerms: ['country music', 'folk music', 'americana', 'country folk'],
+    audioFeatures: {
+      min_acousticness: 0.4,
+      max_danceability: 0.7,
+      min_valence: 0.4,
+      min_tempo: 80,
+      max_tempo: 140
     }
-  };
-
-  const quickRetry = async () => {
-    setIsAnalyzing(true);
-    setError(null);
-    setRetryCount(prev => prev + 1);
-    
-    setTimeout(async () => {
-      try {
-        const match = await findBestMatch();
-        setRecommendation(match);
-        setIsAnalyzing(false);
-      } catch (err) {
-        setError('Qualcosa è andato storto. Riprova!');
-        setIsAnalyzing(false);
-      }
-    }, 1500);
-  };
-
-  const resetQuiz = () => {
-    setCurrentStep(0);
-    setAnswers({});
-    setRecommendation(null);
-    setShowResult(false);
-    setIsAnalyzing(false);
-    setError(null);
-    setRetryCount(0);
-  };
-
-  const currentQuestion = questions[currentStep];
-
-  return (
-    <div className="min-h-screen bg-white text-gray-900">
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,_rgba(0,0,0,0.02),_transparent_50%)]"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,_rgba(0,0,0,0.02),_transparent_50%)]"></div>
-      </div>
-
-      <div className="relative z-10 container mx-auto px-6 py-12 max-w-4xl">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-black mb-6 shadow-xl">
-            <Music className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-5xl font-light tracking-tight text-gray-900 mb-4">
-            Music Matcher
-          </h1>
-          <p className="text-xl text-gray-600 font-light">
-            L'AI che trova la canzone perfetta per te
-          </p>
-          <div className="mt-4 text-sm text-gray-500">
-            Powered by Spotify API
-          </div>
-        </div>
-
-        {!showResult && !isAnalyzing && !error && (
-          <div className="max-w-2xl mx-auto">
-            <div className="mb-12">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-sm font-medium text-gray-900">
-                  {currentStep + 1} di {questions.length}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {Math.round(((currentStep + 1) / questions.length) * 100)}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-1">
-                <div 
-                  className="bg-black h-1 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${((currentStep + 1) / questions.length) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 mb-8">
-              <div className="text-center mb-10">
-                <div className="text-7xl mb-6">{currentQuestion.emoji}</div>
-                <h2 className="text-3xl font-light text-gray-900 mb-2">
-                  {currentQuestion.question}
-                </h2>
-                <p className="text-gray-600 font-light">
-                  {currentQuestion.subtitle}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {currentQuestion.options.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => handleAnswer(currentQuestion.id, option.value)}
-                    className="w-full flex items-center justify-between p-5 rounded-2xl bg-gray-50 border border-gray-100 hover:bg-gray-100 hover:border-gray-200 transition-all duration-200 hover:scale-[1.02] group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="text-2xl">{option.emoji}</div>
-                      <div className="text-left">
-                        <div className="text-lg font-medium text-gray-900">
-                          {option.label}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {option.subtitle}
-                        </div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isAnalyzing && (
-          <div className="max-w-lg mx-auto text-center">
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12">
-              <div className="relative w-24 h-24 mx-auto mb-8">
-                <div className="absolute inset-0 border-4 border-black rounded-full animate-ping opacity-20"></div>
-                <div className="absolute inset-2 border-4 border-gray-600 rounded-full animate-ping opacity-40" style={{animationDelay: '0.2s'}}></div>
-                <div className="absolute inset-4 border-4 border-gray-400 rounded-full animate-ping opacity-60" style={{animationDelay: '0.4s'}}></div>
-                
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
-                    <Music className="w-6 h-6 text-white animate-pulse" />
-                  </div>
-                </div>
-                
-                <div className="absolute -left-8 top-1/2 transform -translate-y-1/2">
-                  <div className="flex gap-1">
-                    {[...Array(4)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-1 bg-black rounded-full animate-pulse"
-                        style={{
-                          height: `${12 + i * 8}px`,
-                          animationDelay: `${i * 0.1}s`,
-                          animationDuration: '0.6s'
-                        }}
-                      ></div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="absolute -right-8 top-1/2 transform -translate-y-1/2">
-                  <div className="flex gap-1">
-                    {[...Array(4)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-1 bg-black rounded-full animate-pulse"
-                        style={{
-                          height: `${28 - i * 8}px`,
-                          animationDelay: `${i * 0.15}s`,
-                          animationDuration: '0.8s'
-                        }}
-                      ></div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
-              <h2 className="text-2xl font-light text-gray-900 mb-4">
-                {retryCount === 0 ? 'Sto analizzando...' : 'Cerco un\'altra canzone...'}
-              </h2>
-              <p className="text-gray-600 font-light mb-6">
-                {retryCount === 0 
-                  ? 'Cerco la canzone perfetta per te su Spotify'
-                  : 'Un momento, sto esplorando altre opzioni per te'
-                }
-              </p>
-              <div className="text-sm text-gray-500">
-                <div className="flex items-center justify-center gap-2 animate-pulse">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                </div>
-                <div className="mt-2 text-xs">Connesso a Spotify</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="max-w-lg mx-auto text-center">
-            <div className="bg-white rounded-3xl shadow-sm border border-red-100 p-8">
-              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl">⚠️</span>
-              </div>
-              <h2 className="text-2xl font-light text-gray-900 mb-4">
-                Oops!
-              </h2>
-              <p className="text-gray-600 mb-8">{error}</p>
-              <button
-                onClick={resetQuiz}
-                className="inline-flex items-center px-8 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors font-medium"
-              >
-                Riprova
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showResult && recommendation && (
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-8 pb-6">
-                <div className="text-center mb-8">
-                  <div className="w-16 h-16 rounded-full bg-black flex items-center justify-center mx-auto mb-6">
-                    <Headphones className="w-8 h-8 text-white" />
-                  </div>
-                  <h2 className="text-3xl font-light text-gray-900 mb-2">
-                    La tua canzone
-                  </h2>
-                  <div className="text-sm text-gray-500">
-                    Match: {recommendation.confidence}% • Powered by Spotify
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 rounded-2xl p-6 mb-6">
-                  <div className="flex items-center gap-6 mb-6">
-                    {recommendation.image ? (
-                      <img 
-                        src={recommendation.image} 
-                        alt={`${recommendation.name} cover`}
-                        className="w-20 h-20 rounded-2xl object-cover shadow-sm"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div className={`w-20 h-20 rounded-2xl bg-black flex items-center justify-center shadow-sm ${recommendation.image ? 'hidden' : ''}`}>
-                      <Music className="w-8 h-8 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-2xl font-medium text-gray-900 mb-1 truncate">
-                        {recommendation.name}
-                      </h3>
-                      <p className="text-xl text-gray-600 mb-2 truncate">
-                        {recommendation.artist}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {recommendation.popularity ? `${recommendation.popularity}% popularity` : 'Spotify Track'}
-                        {recommendation.preview_url && ' • Preview disponibile'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl p-4 mb-6">
-                    <p className="text-gray-700 font-light leading-relaxed">
-                      {recommendation.reason}
-                    </p>
-                    
-                    {recommendation.audioFeatures && (
-                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Energy:</span>
-                          <span className="font-medium">{Math.round(recommendation.audioFeatures.energy * 100)}%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Valence:</span>
-                          <span className="font-medium">{Math.round(recommendation.audioFeatures.valence * 100)}%</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <a
-                      href={recommendation.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
-                    >
-                      <Play className="w-5 h-5" />
-                      Apri su Spotify
-                    </a>
-                    <button
-                      onClick={generatePlaylist}
-                      disabled={isGeneratingPlaylist}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-xl transition-colors font-medium"
-                    >
-                      {isGeneratingPlaylist ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Generando...
-                        </>
-                      ) : (
-                        <>
-                          <Music className="w-5 h-5" />
-                          Genera Playlist
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-8 pb-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <button
-                    onClick={quickRetry}
-                    className="flex items-center justify-center gap-3 px-6 py-4 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-xl transition-colors font-medium"
-                  >
-                    <RotateCcw className="w-5 h-5" />
-                    Non mi piace, altra!
-                  </button>
-                  <button
-                    onClick={resetQuiz}
-                    className="flex items-center justify-center gap-3 px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl transition-colors font-medium"
-                  >
-                    <Sparkles className="w-5 h-5" />
-                    Nuovo quiz
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {playlist && (
-              <div className="mt-8 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-8">
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-light text-gray-900 mb-2">
-                      La tua Playlist
-                    </h3>
-                    <p className="text-gray-600">
-                      {playlist.length} brani selezionati per te
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {playlist.map((track, index) => (
-                      <div key={`${track.id}-${index}`} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm font-medium">
-                          {index + 1}
-                        </div>
-                        {track.image ? (
-                          <img 
-                            src={track.image} 
-                            alt={`${track.name} cover`}
-                            className="w-12 h-12 rounded-lg object-cover"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <div className={`w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center ${track.image ? 'hidden' : ''}`}>
-                          <Music className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-gray-900 truncate">
-                            {track.name}
-                          </h4>
-                          <p className="text-sm text-gray-600 truncate">
-                            {track.artist}
-                          </p>
-                        </div>
-                        <a
-                          href={track.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-shrink-0 p-2 text-gray-400 hover:text-green-500 transition-colors"
-                        >
-                          <ExternalLink className="w-5 h-5" />
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 text-center">
-                    <p className="text-sm text-gray-500 mb-4">
-                      Clicca sui link per aprire le canzoni su Spotify
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  },
+  
+  latin: {
+    seeds: ['latin', 'salsa', 'reggaeton'],
+    searchTerms: ['latin music', 'salsa music', 'reggaeton', 'latin pop'],
+    audioFeatures: {
+      min_danceability: 0.7,
+      min_energy: 0.6,
+      min_valence: 0.5,
+      min_tempo: 90,
+      max_tempo: 150
+    }
+  },
+  
+  ambient: {
+    seeds: ['ambient', 'chill', 'new-age'],
+    searchTerms: ['ambient music', 'chill music', 'atmospheric music', 'meditation music'],
+    audioFeatures: {
+      max_energy: 0.4,
+      min_instrumentalness: 0.3,
+      max_danceability: 0.4,
+      max_loudness: -15,
+      min_tempo: 60,
+      max_tempo: 100
+    }
+  }
 };
 
-export default MusicMoodMatcher;
+const getAudioFeatures = (answers) => {
+  let valence = 0.5, energy = 0.5, danceability = 0.5, tempo = 120;
+  
+  // Mood mapping
+  switch (answers.mood) {
+    case 'happy': valence = 0.8; energy = 0.7; danceability = 0.8; tempo = 128; break;
+    case 'calm': valence = 0.6; energy = 0.3; danceability = 0.4; tempo = 80; break;
+    case 'melancholic': valence = 0.2; energy = 0.4; danceability = 0.3; tempo = 85; break;
+    case 'motivated': valence = 0.7; energy = 0.9; danceability = 0.6; tempo = 140; break;
+    case 'nostalgic': valence = 0.5; energy = 0.5; danceability = 0.5; tempo = 110; break;
+  }
+  
+  // Activity adjustments
+  switch (answers.activity) {
+    case 'exercising': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 130); break;
+    case 'relaxing': energy = Math.max(0.1, energy - 0.4); tempo = Math.min(tempo, 90); break;
+    case 'partying': energy = Math.min(1.0, energy + 0.2); danceability = Math.min(1.0, danceability + 0.3); break;
+    case 'working': energy = Math.max(0.3, Math.min(0.7, energy)); danceability = Math.max(0.2, danceability - 0.2); break;
+  }
+  
+  // Energy level adjustments
+  switch (answers.energy) {
+    case 'high': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 125); break;
+    case 'low': energy = Math.max(0.1, energy - 0.3); tempo = Math.min(tempo, 95); break;
+    case 'medium': energy = Math.max(0.4, Math.min(0.7, energy)); break;
+  }
+  
+  return {
+    valence: valence.toFixed(2),
+    energy: energy.toFixed(2),
+    danceability: danceability.toFixed(2),
+    tempo: Math.round(tempo)
+  };
+};
+
+const buildRecommendationParams = (genreProfile, moodFeatures) => {
+  const params = {
+    seed_genres: genreProfile.seeds.slice(0, 2).join(','),
+    limit: 30
+  };
+  
+  // Combina audio features del genere con quelle del mood
+  const combinedFeatures = { ...genreProfile.audioFeatures };
+  
+  // Applica mood adjustments mantenendo i vincoli del genere
+  if (moodFeatures.valence) {
+    if (!combinedFeatures.min_valence && !combinedFeatures.max_valence) {
+      const valenceRange = 0.2;
+      combinedFeatures.min_valence = Math.max(0, parseFloat(moodFeatures.valence) - valenceRange);
+      combinedFeatures.max_valence = Math.min(1, parseFloat(moodFeatures.valence) + valenceRange);
+    }
+  }
+  
+  if (moodFeatures.energy) {
+    const energyValue = parseFloat(moodFeatures.energy);
+    if (combinedFeatures.min_energy) {
+      combinedFeatures.min_energy = Math.max(combinedFeatures.min_energy, energyValue - 0.2);
+    }
+    if (combinedFeatures.max_energy) {
+      combinedFeatures.max_energy = Math.min(combinedFeatures.max_energy, energyValue + 0.2);
+    }
+    if (!combinedFeatures.min_energy && !combinedFeatures.max_energy) {
+      combinedFeatures.min_energy = Math.max(0, energyValue - 0.2);
+      combinedFeatures.max_energy = Math.min(1, energyValue + 0.2);
+    }
+  }
+  
+  if (moodFeatures.danceability) {
+    const danceValue = parseFloat(moodFeatures.danceability);
+    if (combinedFeatures.min_danceability) {
+      combinedFeatures.min_danceability = Math.max(combinedFeatures.min_danceability, danceValue - 0.2);
+    }
+    if (combinedFeatures.max_danceability) {
+      combinedFeatures.max_danceability = Math.min(combinedFeatures.max_danceability, danceValue + 0.2);
+    }
+    if (!combinedFeatures.min_danceability && !combinedFeatures.max_danceability) {
+      combinedFeatures.min_danceability = Math.max(0, danceValue - 0.2);
+      combinedFeatures.max_danceability = Math.min(1, danceValue + 0.2);
+    }
+  }
+  
+  // Aggiungi tempo se specificato nel mood
+  if (moodFeatures.tempo && !combinedFeatures.min_tempo && !combinedFeatures.max_tempo) {
+    const tempoValue = parseInt(moodFeatures.tempo);
+    combinedFeatures.min_tempo = Math.max(60, tempoValue - 20);
+    combinedFeatures.max_tempo = Math.min(200, tempoValue + 20);
+  }
+  
+  return { ...params, ...combinedFeatures };
+};
+
+exports.handler = async (event, context) => {
+  try {
+    console.log('🎵 === SPOTIFY FUNCTION START (ENHANCED) ===');
+    console.log('📥 Parametri ricevuti:', event.queryStringParameters);
+    
+    const answers = event.queryStringParameters || {};
+    
+    // Ottieni token Spotify
+    console.log('🔑 Richiedendo token Spotify...');
+    const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+      },
+      body: 'grant_type=client_credentials'
+    });
+    
+    if (!tokenResponse.ok) {
+      throw new Error(`Token request failed: ${tokenResponse.status}`);
+    }
+    
+    const tokenData = await tokenResponse.json();
+    const token = tokenData.access_token;
+    console.log('✅ Token Spotify ottenuto');
+    
+    // Calcola audio features del mood
+    const moodFeatures = getAudioFeatures(answers);
+    const selectedGenre = answers.genre || 'pop';
+    const genreProfile = genreProfiles[selectedGenre] || genreProfiles['pop'];
+    
+    console.log(`🎯 Genere selezionato: "${selectedGenre}"`);
+    console.log(`🎼 Seeds disponibili: [${genreProfile.seeds.join(', ')}]`);
+    console.log(`🎵 Audio features mood:`, moodFeatures);
+    console.log(`🎸 Audio features genere:`, genreProfile.audioFeatures);
+    
+    let tracks = [];
+    
+    // STRATEGIA 1: Recommendations API con profilo genere + mood
+    try {
+      console.log('📡 Tentativo 1: Recommendations API Enhanced...');
+      
+      const recParams = buildRecommendationParams(genreProfile, moodFeatures);
+      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(recParams)}`;
+      
+      console.log('🔗 URL Recommendations:', recommendationsUrl);
+      
+      const recResponse = await fetch(recommendationsUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      console.log(`📊 Recommendations response status: ${recResponse.status}`);
+      
+      if (recResponse.ok) {
+        const recData = await recResponse.json();
+        console.log(`🎵 Recommendations trovate: ${recData.tracks?.length || 0}`);
+        
+        if (recData.tracks && recData.tracks.length > 0) {
+          tracks = recData.tracks.map(track => ({
+            name: track.name,
+            artist: track.artists[0].name,
+            url: track.external_urls.spotify,
+            image: track.album.images[1]?.url || track.album.images[0]?.url,
+            popularity: track.popularity,
+            preview_url: track.preview_url,
+            id: track.id,
+            source: 'recommendations-enhanced'
+          }));
+          console.log(`✅ SUCCESSO con Recommendations Enhanced: ${tracks.length} canzoni`);
+        }
+      } else {
+        const errorText = await recResponse.text();
+        console.log(`❌ Recommendations error: ${recResponse.status} - ${errorText}`);
+      }
+    } catch (error) {
+      console.log('❌ Recommendations Enhanced error:', error.message);
+    }
+    
+    // STRATEGIA 2: Search API con termini specifici del genere
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 2: Search API con termini specifici...');
+      
+      for (const searchTerm of genreProfile.searchTerms) {
+        try {
+          console.log(`🔍 Cercando: "${searchTerm}"`);
+          
+          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=30`;
+          const searchResponse = await fetch(searchUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          console.log(`📊 Search "${searchTerm}" status: ${searchResponse.status}`);
+          
+          if (searchResponse.ok) {
+            const searchData = await searchResponse.json();
+            console.log(`🎵 Search "${searchTerm}" trovate: ${searchData.tracks.items?.length || 0}`);
+            
+            if (searchData.tracks.items.length > 0) {
+              tracks = searchData.tracks.items.map(track => ({
+                name: track.name,
+                artist: track.artists[0].name,
+                url: track.external_urls.spotify,
+                image: track.album.images[1]?.url || track.album.images[0]?.url,
+                popularity: track.popularity,
+                preview_url: track.preview_url,
+                id: track.id,
+                source: `search-${searchTerm}`
+              }));
+              console.log(`✅ SUCCESSO con Search "${searchTerm}": ${tracks.length} canzoni`);
+              break;
+            }
+          } else {
+            console.log(`❌ Search "${searchTerm}" failed: ${searchResponse.status}`);
+          }
+        } catch (error) {
+          console.log(`❌ Search "${searchTerm}" error:`, error.message);
+          continue;
+        }
+      }
+    }
+    
+    // STRATEGIA 3: Recommendations API base (fallback)
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 3: Recommendations API base...');
+      
+      const basicParams = {
+        seed_genres: genreProfile.seeds.slice(0, 2).join(','),
+        limit: 30,
+        min_popularity: 20
+      };
+      
+      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(basicParams)}`;
+      const recResponse = await fetch(recommendationsUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (recResponse.ok) {
+        const recData = await recResponse.json();
+        if (recData.tracks && recData.tracks.length > 0) {
+          tracks = recData.tracks.map(track => ({
+            name: track.name,
+            artist: track.artists[0].name,
+            url: track.external_urls.spotify,
+            image: track.album.images[1]?.url || track.album.images[0]?.url,
+            popularity: track.popularity,
+            preview_url: track.preview_url,
+            id: track.id,
+            source: 'recommendations-basic'
+          }));
+          console.log(`✅ Fallback Recommendations: ${tracks.length} canzoni`);
+        }
+      }
+    }
+    
+    // STRATEGIA 4: Search generico (ultimo fallback)
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 4: Search generico...');
+      
+      const fallbackQuery = `${selectedGenre} music`;
+      const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=20`;
+      const searchResponse = await fetch(searchUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        tracks = searchData.tracks.items.map(track => ({
+          name: track.name,
+          artist: track.artists[0].name,
+          url: track.external_urls.spotify,
+          image: track.album.images[1]?.url || track.album.images[0]?.url,
+          popularity: track.popularity,
+          preview_url: track.preview_url,
+          id: track.id,
+          source: 'search-generic'
+        }));
+        console.log(`✅ Search generico: ${tracks.length} canzoni`);
+      }
+    }
+    
+    // Rimuovi duplicati e filtra per qualità
+    const uniqueTracks = [];
+    const seen = new Set();
+    
+    for (const track of tracks) {
+      const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
+      if (!seen.has(key) && track.popularity >= 10) { // Minima qualità
+        seen.add(key);
+        uniqueTracks.push(track);
+      }
+    }
+    
+    // Ordina per popolarità e rilevanza
+    uniqueTracks.sort((a, b) => {
+      // Priorità per source (recommendations > search)
+      const sourceWeight = {
+        'recommendations-enhanced': 100,
+        'recommendations-basic': 80,
+        'search-specific': 60,
+        'search-generic': 40
+      };
+      
+      const aWeight = sourceWeight[a.source] || 0;
+      const bWeight = sourceWeight[b.source] || 0;
+      
+      if (aWeight !== bWeight) return bWeight - aWeight;
+      
+      // Poi per popolarità
+      return (b.popularity || 0) - (a.popularity || 0);
+    });
+    
+    console.log(`🎵 === RISULTATO FINALE ENHANCED ===`);
+    console.log(`📊 Canzoni uniche trovate: ${uniqueTracks.length}`);
+    console.log(`🎯 Genere richiesto: ${selectedGenre}`);
+    console.log(`🎸 Profilo genere usato:`, genreProfile.audioFeatures);
+    console.log(`🔗 Prima canzone: ${uniqueTracks[0]?.name} - ${uniqueTracks[0]?.artist} (source: ${uniqueTracks[0]?.source})`);
+    
+    return {
+      statusCode: 200,
+      headers: { 
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        tracks: uniqueTracks,
+        audioFeatures: moodFeatures,
+        genreProfile: genreProfile.audioFeatures,
+        requestedGenre: selectedGenre,
+        usedSeeds: genreProfile.seeds,
+        searchTerms: genreProfile.searchTerms,
+        message: `Found ${uniqueTracks.length} tracks with enhanced genre precision`,
+        success: true
+      })
+    };
+    
+  } catch (error) {
+    console.error('💥 === ERRORE FINALE ENHANCED ===');
+    console.error('❌ Error:', error.message);
+    
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ 
+        error: error.message, 
+        tracks: [],
+        success: false
+      })
+    };
+  }
+};

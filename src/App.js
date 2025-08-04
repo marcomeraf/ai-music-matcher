@@ -9,8 +9,6 @@ const MusicMoodMatcher = () => {
   const [showResult, setShowResult] = useState(false);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [playlist, setPlaylist] = useState(null);
-  const [isGeneratingPlaylist, setIsGeneratingPlaylist] = useState(false);
 
   const questions = [
     {
@@ -141,8 +139,9 @@ const MusicMoodMatcher = () => {
   };
 
   // Chiamata alla Netlify Function
-  const searchSpotify = async (tags, isPlaylistGeneration = false, seedTrack = '') => {
+  const searchSpotify = async (tags) => {
     try {
+      console.log(`🎵 Chiamando Netlify Function...`);
       console.log('📍 URL completo:', window.location.origin);
       
       const params = new URLSearchParams({
@@ -151,9 +150,7 @@ const MusicMoodMatcher = () => {
         energy: answers.energy || 'medium',
         time: answers.time || 'evening',
         genre: answers.genre || 'pop',
-        tags: tags.join(','),
-        isPlaylist: isPlaylistGeneration ? 'true' : 'false',
-        seedTrack: seedTrack || ''
+        tags: tags.join(',')
       });
       
       const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
@@ -179,59 +176,37 @@ const MusicMoodMatcher = () => {
       const data = JSON.parse(responseText);
       
       if (data.tracks && data.tracks.length > 0) {
+        console.log(`✅ Netlify Function: trovate ${data.tracks.length} canzoni`);
         return data.tracks.map(track => ({
           ...track,
           score: Math.random() * 100 + (track.popularity || 50)
         }));
       }
       
-      throw new Error(`Nessuna ${isPlaylistGeneration ? 'playlist' : 'canzone'} trovata dalla function`);
+      throw new Error('Nessuna canzone trovata dalla function');
       
     } catch (error) {
-      console.error(`Errore nella Netlify Function${isPlaylistGeneration ? ' (playlist)' : ''}:`, error);
+      console.error('Errore nella Netlify Function:', error);
       
-      if (!isPlaylistGeneration) {
-        console.log('🔄 Usando fallback locale...');
-        return getFallbackTracks();
-      } else {
-        throw error;
-      }
+      console.log('🔄 Usando fallback locale...');
+      return getFallbackTracks();
     }
   };
 
   // Fallback locale
   const getFallbackTracks = () => {
     const tracks = [
-      {
-        id: 'fallback-1',
-        name: 'Blinding Lights',
-        artist: 'The Weeknd',
-        url: 'https://open.spotify.com/track/0VjIjW4GlULA4LGoDOLVKN',
-        image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&h=300&fit=crop',
-        popularity: 95
-      },
-      {
-        id: 'fallback-2',
-        name: 'Watermelon Sugar',
-        artist: 'Harry Styles',
-        url: 'https://open.spotify.com/track/6UelLqGlWMcVH1E5c4H7lY',
-        image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&h=300&fit=crop',
-        popularity: 88
-      },
-      {
-        id: 'fallback-3',
-        name: 'Good 4 U',
-        artist: 'Olivia Rodrigo',
-        url: 'https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG',
-        image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&h=300&fit=crop',
-        popularity: 92
-      }
+      { name: "Blinding Lights", artist: "The Weeknd", url: "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b", popularity: 95 },
+      { name: "Levitating", artist: "Dua Lipa", url: "https://open.spotify.com/track/39LLxExYz6ewLAcYrzQQyP", popularity: 90 },
+      { name: "Good 4 U", artist: "Olivia Rodrigo", url: "https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG", popularity: 88 },
+      { name: "Stay", artist: "The Kid LAROI & Justin Bieber", url: "https://open.spotify.com/track/5PjdY0CKGZdEuoNab3yDmX", popularity: 87 },
+      { name: "Industry Baby", artist: "Lil Nas X & Jack Harlow", url: "https://open.spotify.com/track/27NovPIUIRrOZoCHxABJwK", popularity: 86 }
     ];
     
     return tracks.map(track => ({
       ...track,
       score: Math.random() * 100 + track.popularity
-    }));
+    })).sort((a, b) => b.score - a.score);
   };
 
   // Audio features
@@ -349,31 +324,6 @@ const MusicMoodMatcher = () => {
     }
   };
 
-  const generatePlaylist = async () => {
-    if (!recommendation) return;
-    
-    setIsGeneratingPlaylist(true);
-    try {
-      const tags = getMoodBasedTags(answers);
-      const playlistTracks = await searchSpotify(tags, true, recommendation.id);
-      
-      // Rimuovi la canzone principale dalla playlist se presente
-      const filteredTracks = playlistTracks.filter(track => track.id !== recommendation.id);
-      
-      // Prendi le prime 10-15 canzoni
-      const finalPlaylist = filteredTracks.slice(0, 12);
-      
-      setPlaylist(finalPlaylist);
-    } catch (error) {
-      console.error('Errore nella generazione playlist:', error);
-      // Fallback: genera una playlist con canzoni simili
-      const fallbackPlaylist = getFallbackTracks().slice(0, 8);
-      setPlaylist(fallbackPlaylist);
-    } finally {
-      setIsGeneratingPlaylist(false);
-    }
-  };
-
   const handleAnswer = (questionId, answer) => {
     const newAnswers = { ...answers, [questionId]: answer };
     setAnswers(newAnswers);
@@ -423,8 +373,6 @@ const MusicMoodMatcher = () => {
     setIsAnalyzing(false);
     setError(null);
     setRetryCount(0);
-    setPlaylist(null);
-    setIsGeneratingPlaylist(false);
   };
 
   const currentQuestion = questions[currentStep];
@@ -671,23 +619,20 @@ const MusicMoodMatcher = () => {
                       <Play className="w-5 h-5" />
                       Apri su Spotify
                     </a>
-                    <button
-                      onClick={generatePlaylist}
-                      disabled={isGeneratingPlaylist}
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-xl transition-colors font-medium"
-                    >
-                      {isGeneratingPlaylist ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Generando...
-                        </>
-                      ) : (
-                        <>
-                          <Music className="w-5 h-5" />
-                          Genera Playlist
-                        </>
-                      )}
-                    </button>
+                    {recommendation.preview_url ? (
+                      <audio
+                        controls
+                        src={recommendation.preview_url}
+                        className="w-full h-12 rounded-xl"
+                        style={{ filter: 'sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%)' }}
+                      >
+                        Il tuo browser non supporta l'audio.
+                      </audio>
+                    ) : (
+                      <div className="flex items-center justify-center px-6 py-4 bg-gray-100 text-gray-500 rounded-xl">
+                        <span className="text-sm">Preview non disponibile</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -711,67 +656,6 @@ const MusicMoodMatcher = () => {
                 </div>
               </div>
             </div>
-
-            {playlist && (
-              <div className="mt-8 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-8">
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-light text-gray-900 mb-2">
-                      La tua Playlist
-                    </h3>
-                    <p className="text-gray-600">
-                      {playlist.length} brani selezionati per te
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {playlist.map((track, index) => (
-                      <div key={`${track.id}-${index}`} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm font-medium">
-                          {index + 1}
-                        </div>
-                        {track.image ? (
-                          <img 
-                            src={track.image} 
-                            alt={`${track.name} cover`}
-                            className="w-12 h-12 rounded-lg object-cover"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <div className={`w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center ${track.image ? 'hidden' : ''}`}>
-                          <Music className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-gray-900 truncate">
-                            {track.name}
-                          </h4>
-                          <p className="text-sm text-gray-600 truncate">
-                            {track.artist}
-                          </p>
-                        </div>
-                        <a
-                          href={track.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-shrink-0 p-2 text-gray-400 hover:text-green-500 transition-colors"
-                        >
-                          <ExternalLink className="w-5 h-5" />
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 text-center">
-                    <p className="text-sm text-gray-500 mb-4">
-                      Clicca sui link per aprire le canzoni su Spotify
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
