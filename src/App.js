@@ -1,3 +1,8 @@
+import React, { useState } from 'react';
+import { Music, Brain, Heart, Play, RotateCcw, Sparkles, Headphones, ExternalLink, ChevronRight } from 'lucide-react';
+
+// POI tutto il resto del codice dall'artifact
+const MusicMoodMatcher = () => {
 // Database locale ricchissimo con canzoni Spotify vere
   const getMusicDatabase = () => {
     return {
