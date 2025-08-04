@@ -15,5 +15,6 @@
   "browserslist": {
     "production": [">0.2%", "not dead"],
     "development": ["last 1 chrome version"]
-  }
+  },
+  "proxy": "http://localhost:9000"
 }
