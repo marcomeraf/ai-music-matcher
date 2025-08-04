@@ -260,7 +260,11 @@ const buildRecommendationParams = (genreProfile, moodFeatures) => {
 // Nuova funzione per generare playlist basata su una canzone
 const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre, answers) => {
   try {
-    console.log(`🎵 Generando playlist basata su track ID: ${trackId}`);
+    console.log(`🎵 === GENERAZIONE PLAYLIST ===`);
+    console.log(`🎯 Track ID: ${trackId}`);
+    console.log(`🎤 Artista: ${trackArtist}`);
+    console.log(`🎼 Genere: ${trackGenre}`);
+    console.log(`🎭 Mood: ${answers.mood}, Activity: ${answers.activity}, Energy: ${answers.energy}`);
     
     // Ottieni audio features della canzone base
     const audioFeaturesUrl = `https://api.spotify.com/v1/audio-features/${trackId}`;
@@ -271,14 +275,18 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
     let baseFeatures = {};
     if (audioResponse.ok) {
       const audioData = await audioResponse.json();
-      baseFeatures = {
-        target_energy: audioData.energy,
-        target_valence: audioData.valence,
-        target_danceability: audioData.danceability,
-        target_acousticness: audioData.acousticness,
-        target_tempo: audioData.tempo
-      };
+      if (audioData && !audioData.error) {
+        baseFeatures = {
+          target_energy: audioData.energy,
+          target_valence: audioData.valence,
+          target_danceability: audioData.danceability,
+          target_acousticness: audioData.acousticness,
+          target_tempo: audioData.tempo
+        };
+      }
       console.log('🎼 Audio features della canzone base:', baseFeatures);
+    } else {
+      console.log('⚠️ Non riesco a ottenere audio features, uso solo genere');
     }
     
     const genreProfile = genreProfiles[trackGenre] || genreProfiles['pop'];
@@ -287,13 +295,13 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
     // STRATEGIA 1: Recommendations basate sulla canzone specifica
     try {
       const recParams = {
-        seed_tracks: trackId,
-        limit: 20,
+        seed_tracks: trackId, 
+        limit: 25,
         ...baseFeatures,
-        // Aggiungi un po' di varietà
-        min_popularity: 20
+        min_popularity: 15
       };
       
+      console.log('🎯 Parametri track-based:', recParams);
       const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(recParams)}`;
       const recResponse = await fetch(recommendationsUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -301,6 +309,8 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
       
       if (recResponse.ok) {
         const recData = await recResponse.json();
+        console.log(`📊 Track-based response: ${recData.tracks?.length || 0} canzoni`);
+        
         if (recData.tracks && recData.tracks.length > 0) {
           playlistTracks = recData.tracks.map(track => ({
             name: track.name,
@@ -313,14 +323,18 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
           }));
           console.log(`✅ Track-based recommendations: ${playlistTracks.length} canzoni`);
         }
+      } else {
+        const errorText = await recResponse.text();
+        console.log(`❌ Track-based error: ${recResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.log('❌ Track-based recommendations error:', error.message);
     }
     
     // STRATEGIA 2: Recommendations basate sull'artista
-    if (playlistTracks.length < 15) {
+    if (playlistTracks.length < 20) {
       try {
+        console.log('🎤 Tentativo artist-based...');
         // Cerca l'artista per ottenere l'ID
         const artistSearchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(trackArtist)}&type=artist&limit=1`;
         const artistResponse = await fetch(artistSearchUrl, {
@@ -329,16 +343,20 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
         
         if (artistResponse.ok) {
           const artistData = await artistResponse.json();
+          console.log(`🔍 Artist search: ${artistData.artists?.items?.length || 0} risultati`);
+          
           if (artistData.artists.items.length > 0) {
             const artistId = artistData.artists.items[0].id;
+            console.log(`🎤 Artist ID trovato: ${artistId}`);
             
             const artistRecParams = {
               seed_artists: artistId,
-              seed_genres: genreProfile.seeds.slice(0, 1).join(','),
-              limit: 15,
-              min_popularity: 15
+              seed_genres: genreProfile.seeds.slice(0, 2).join(','),
+              limit: 20,
+              min_popularity: 10
             };
             
+            console.log('🎯 Parametri artist-based:', artistRecParams);
             const artistRecUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(artistRecParams)}`;
             const artistRecResponse = await fetch(artistRecUrl, {
               headers: { 'Authorization': `Bearer ${token}` }
@@ -346,6 +364,8 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
             
             if (artistRecResponse.ok) {
               const artistRecData = await artistRecResponse.json();
+              console.log(`📊 Artist-based response: ${artistRecData.tracks?.length || 0} canzoni`);
+              
               const artistTracks = artistRecData.tracks.map(track => ({
                 name: track.name,
                 artist: track.artists[0].name,
@@ -358,8 +378,13 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
               
               playlistTracks = [...playlistTracks, ...artistTracks];
               console.log(`✅ Artist-based recommendations: ${artistTracks.length} canzoni aggiunte`);
+            } else {
+              const errorText = await artistRecResponse.text();
+              console.log(`❌ Artist-based error: ${artistRecResponse.status} - ${errorText}`);
             }
           }
+        } else {
+          console.log(`❌ Artist search error: ${artistResponse.status}`);
         }
       } catch (error) {
         console.log('❌ Artist-based recommendations error:', error.message);
@@ -367,15 +392,17 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
     }
     
     // STRATEGIA 3: Genre-based recommendations se ancora non abbiamo abbastanza
-    if (playlistTracks.length < 15) {
+    if (playlistTracks.length < 20) {
       try {
+        console.log('🎼 Tentativo genre-based...');
         const genreRecParams = {
-          seed_genres: genreProfile.seeds.slice(0, 2).join(','),
-          limit: 20,
+          seed_genres: genreProfile.seeds.slice(0, 3).join(','),
+          limit: 25,
           ...genreProfile.audioFeatures,
-          min_popularity: 10
+          min_popularity: 5
         };
         
+        console.log('🎯 Parametri genre-based:', genreRecParams);
         const genreRecUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(genreRecParams)}`;
         const genreRecResponse = await fetch(genreRecUrl, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -383,6 +410,8 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
         
         if (genreRecResponse.ok) {
           const genreRecData = await genreRecResponse.json();
+          console.log(`📊 Genre-based response: ${genreRecData.tracks?.length || 0} canzoni`);
+          
           const genreTracks = genreRecData.tracks.map(track => ({
             name: track.name,
             artist: track.artists[0].name,
@@ -395,6 +424,9 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
           
           playlistTracks = [...playlistTracks, ...genreTracks];
           console.log(`✅ Genre-based recommendations: ${genreTracks.length} canzoni aggiunte`);
+        } else {
+          const errorText = await genreRecResponse.text();
+          console.log(`❌ Genre-based error: ${genreRecResponse.status} - ${errorText}`);
         }
       } catch (error) {
         console.log('❌ Genre-based recommendations error:', error.message);
@@ -404,13 +436,13 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
     // Rimuovi duplicati e la canzone originale
     const uniqueTracks = [];
     const seen = new Set();
-    seen.add(trackId); // Escludi la canzone originale
+    seen.add(trackId.toLowerCase()); // Escludi la canzone originale
     
     for (const track of playlistTracks) {
       const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
-      if (!seen.has(key) && !seen.has(track.id) && track.popularity >= 5) {
+      if (!seen.has(key) && !seen.has(track.id?.toLowerCase()) && track.popularity >= 1) {
         seen.add(key);
-        seen.add(track.id);
+        if (track.id) seen.add(track.id.toLowerCase());
         uniqueTracks.push(track);
       }
     }
@@ -433,11 +465,19 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
     // Prendi le prime 15
     const finalPlaylist = uniqueTracks.slice(0, 15);
     
-    console.log(`🎵 Playlist generata: ${finalPlaylist.length} canzoni`);
+    console.log(`🎵 === PLAYLIST FINALE ===`);
+    console.log(`📊 Totale canzoni trovate: ${playlistTracks.length}`);
+    console.log(`🔄 Canzoni uniche: ${uniqueTracks.length}`);
+    console.log(`✅ Playlist finale: ${finalPlaylist.length} canzoni`);
+    
+    if (finalPlaylist.length > 0) {
+      console.log(`🎵 Prima canzone playlist: "${finalPlaylist[0].name}" by ${finalPlaylist[0].artist}`);
+    }
+    
     return finalPlaylist;
     
   } catch (error) {
-    console.error('❌ Errore nella generazione playlist:', error);
+    console.error('❌ ERRORE GENERAZIONE PLAYLIST:', error);
     throw error;
   }
 };

@@ -321,20 +321,23 @@ const MusicMoodMatcher = () => {
   };
 
   const generatePlaylist = async () => {
-    if (!recommendation || !recommendation.id) {
-      setError('Impossibile generare playlist senza una canzone di base');
+    if (!recommendation) {
+      setError('Nessuna canzone di base trovata');
       return;
     }
+    
+    console.log('🎵 === INIZIO GENERAZIONE PLAYLIST ===');
+    console.log('🎯 Canzone base:', recommendation.name, 'by', recommendation.artist);
+    console.log('🎼 Genere:', answers.genre);
+    console.log('🎭 Answers:', answers);
     
     setIsGeneratingPlaylist(true);
     setError(null);
     
     try {
-      console.log('🎵 Generando playlist basata su:', recommendation.name);
-      
       const params = new URLSearchParams({
         action: 'generate_playlist',
-        trackId: recommendation.id,
+        trackId: recommendation.id || 'fallback',
         trackArtist: recommendation.artist,
         trackGenre: answers.genre || 'pop',
         mood: answers.mood || 'happy',
@@ -343,28 +346,40 @@ const MusicMoodMatcher = () => {
       });
       
       const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
-      console.log('🔗 Chiamando per playlist:', apiUrl);
+      console.log('🔗 URL playlist:', apiUrl);
       
       const response = await fetch(apiUrl);
+      console.log('📊 Response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
         throw new Error(`Errore nella generazione: ${response.status} - ${errorText}`);
       }
       
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log('📄 Response text (primi 200 char):', responseText.substring(0, 200));
+      
+      const data = JSON.parse(responseText);
+      console.log('📊 Data ricevuta:', data);
       
       if (data.playlist && data.playlist.length > 0) {
         setPlaylist(data.playlist);
         setShowPlaylist(true);
-        console.log(`✅ Playlist generata: ${data.playlist.length} canzoni`);
+        console.log(`✅ PLAYLIST GENERATA CON SUCCESSO: ${data.playlist.length} canzoni`);
+        
+        // Log prime 3 canzoni per debug
+        data.playlist.slice(0, 3).forEach((track, i) => {
+          console.log(`🎵 ${i+1}. "${track.name}" by ${track.artist} (${track.source})`);
+        });
       } else {
-        throw new Error('Nessuna canzone trovata per la playlist');
+        console.error('❌ Playlist vuota o non trovata:', data);
+        throw new Error(data.message || 'Nessuna canzone trovata per la playlist');
       }
       
     } catch (error) {
-      console.error('Errore generazione playlist:', error);
-      setError('Errore nella generazione della playlist. Riprova!');
+      console.error('❌ ERRORE GENERAZIONE PLAYLIST:', error);
+      setError(`Errore nella generazione della playlist: ${error.message}`);
     } finally {
       setIsGeneratingPlaylist(false);
     }
