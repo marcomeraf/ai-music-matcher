@@ -271,6 +271,11 @@ const MusicMoodMatcher = () => {
       // Se l'utente non è soddisfatto, può usare "Non mi piace" per variare
       selectedTrack = tracks[0];
       
+      // Log per debug del genere
+      console.log(`🎯 Genere richiesto: ${answers.genre}`);
+      console.log(`🎵 Canzone selezionata: "${selectedTrack.name}" by ${selectedTrack.artist}`);
+      console.log(`📊 Source: ${selectedTrack.source}, Popularity: ${selectedTrack.popularity}`);
+      
       const explanation = generateExplanation(selectedTrack, answers, tags);
       const audioFeatures = getAudioFeaturesFromMood(answers);
       const popularityScore = selectedTrack.popularity || 50;

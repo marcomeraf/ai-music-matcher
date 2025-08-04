@@ -198,12 +198,17 @@ const getAudioFeatures = (answers) => {
 
 const buildRecommendationParams = (genreProfile, moodFeatures) => {
   const params = {
-    seed_genres: genreProfile.seeds.slice(0, 2).join(','),
+    seed_genres: genreProfile.seeds.slice(0, 3).join(','),
     limit: 30
   };
   
   // Combina audio features del genere con quelle del mood
   const combinedFeatures = { ...genreProfile.audioFeatures };
+  
+  // Aumenta l'importanza del genere
+  if (genreProfile.audioFeatures.min_popularity === undefined) {
+    combinedFeatures.min_popularity = 20; // Assicura qualità minima
+  }
   
   // Applica mood adjustments mantenendo i vincoli del genere
   if (moodFeatures.valence) {
@@ -523,6 +528,10 @@ exports.handler = async (event, context) => {
       console.log('📡 Tentativo 1: Recommendations API Enhanced...');
       
       const recParams = buildRecommendationParams(genreProfile, moodFeatures);
+      
+      // Log per debug
+      console.log('🎯 Parametri recommendations:', recParams);
+      
       const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(recParams)}`;
       
       console.log('🔗 URL Recommendations:', recommendationsUrl);
@@ -546,9 +555,15 @@ exports.handler = async (event, context) => {
             popularity: track.popularity,
             preview_url: track.preview_url,
             id: track.id,
+            genres: track.artists[0].genres || [],
             source: 'recommendations-enhanced'
           }));
           console.log(`✅ SUCCESSO con Recommendations Enhanced: ${tracks.length} canzoni`);
+          
+          // Log delle prime 3 canzoni per debug
+          tracks.slice(0, 3).forEach((track, i) => {
+            console.log(`🎵 Track ${i+1}: "${track.name}" by ${track.artist} (pop: ${track.popularity})`);
+          });
         }
       } else {
         const errorText = await recResponse.text();
@@ -562,11 +577,16 @@ exports.handler = async (event, context) => {
     if (tracks.length === 0) {
       console.log('📡 Tentativo 2: Search API con termini specifici...');
       
-      for (const searchTerm of genreProfile.searchTerms) {
+      // Prova prima con i termini più specifici
+      const priorityTerms = genreProfile.searchTerms.slice(0, 2);
+      
+      for (const searchTerm of priorityTerms) {
         try {
           console.log(`🔍 Cercando: "${searchTerm}"`);
           
-          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=30`;
+          // Cerca con filtro genere più specifico
+          const genreQuery = `${searchTerm} genre:"${selectedGenre}"`;
+          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(genreQuery)}&type=track&limit=20`;
           const searchResponse = await fetch(searchUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
@@ -586,6 +606,7 @@ exports.handler = async (event, context) => {
                 popularity: track.popularity,
                 preview_url: track.preview_url,
                 id: track.id,
+                genres: track.artists[0].genres || [],
                 source: `search-${searchTerm}`
               }));
               console.log(`✅ SUCCESSO con Search "${searchTerm}": ${tracks.length} canzoni`);
@@ -606,9 +627,10 @@ exports.handler = async (event, context) => {
       console.log('📡 Tentativo 3: Recommendations API base...');
       
       const basicParams = {
-        seed_genres: genreProfile.seeds.slice(0, 2).join(','),
-        limit: 30,
-        min_popularity: 20
+        seed_genres: genreProfile.seeds.slice(0, 1).join(','), // Solo 1 genere per essere più specifici
+        limit: 20,
+        min_popularity: 30, // Popolarità più alta per qualità
+        ...genreProfile.audioFeatures // Usa le caratteristiche del genere
       };
       
       const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(basicParams)}`;
@@ -627,6 +649,7 @@ exports.handler = async (event, context) => {
             popularity: track.popularity,
             preview_url: track.preview_url,
             id: track.id,
+            genres: track.artists[0].genres || [],
             source: 'recommendations-basic'
           }));
           console.log(`✅ Fallback Recommendations: ${tracks.length} canzoni`);
@@ -638,7 +661,8 @@ exports.handler = async (event, context) => {
     if (tracks.length === 0) {
       console.log('📡 Tentativo 4: Search generico...');
       
-      const fallbackQuery = `${selectedGenre} music`;
+      // Search più specifico per genere
+      const fallbackQuery = `genre:"${selectedGenre}" year:2020-2024`; // Canzoni recenti del genere
       const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=20`;
       const searchResponse = await fetch(searchUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -654,6 +678,7 @@ exports.handler = async (event, context) => {
           popularity: track.popularity,
           preview_url: track.preview_url,
           id: track.id,
+          genres: track.artists[0].genres || [],
           source: 'search-generic'
         }));
         console.log(`✅ Search generico: ${tracks.length} canzoni`);
@@ -666,24 +691,28 @@ exports.handler = async (event, context) => {
     
     for (const track of tracks) {
       const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
-      if (!seen.has(key) && track.popularity >= 10) { // Minima qualità
+      if (!seen.has(key) && track.popularity >= 20) { // Qualità più alta
         seen.add(key);
         uniqueTracks.push(track);
       }
     }
     
-    // Ordina per popolarità e rilevanza
+    // Ordina per rilevanza del genere e popolarità
     uniqueTracks.sort((a, b) => {
       // Priorità per source (recommendations > search)
       const sourceWeight = {
         'recommendations-enhanced': 100,
         'recommendations-basic': 80,
-        'search-specific': 60,
+        'search-genre-specific': 90, // Nuovo peso alto per search con genere
         'search-generic': 40
       };
       
-      const aWeight = sourceWeight[a.source] || 0;
-      const bWeight = sourceWeight[b.source] || 0;
+      let aWeight = sourceWeight[a.source] || 0;
+      let bWeight = sourceWeight[b.source] || 0;
+      
+      // Bonus se il genere è nel nome dell'artista o nelle info
+      if (a.genres && a.genres.some(g => g.includes(selectedGenre))) aWeight += 20;
+      if (b.genres && b.genres.some(g => g.includes(selectedGenre))) bWeight += 20;
       
       if (aWeight !== bWeight) return bWeight - aWeight;
       
