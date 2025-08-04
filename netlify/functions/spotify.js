@@ -534,4 +534,325 @@ const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre
     
   } catch (error) {
     console.error('❌ ERRORE GENERAZIONE PLAYLIST:', error);
+    throw error;
+  }
+};
+
+exports.handler = async (event, context) => {
+  try {
+    console.log('🎵 === SPOTIFY FUNCTION START (ENHANCED) ===');
+    console.log('📥 Parametri ricevuti:', event.queryStringParameters);
     
+    const answers = event.queryStringParameters || {};
+    
+    // Controlla se è una richiesta per generare playlist
+    if (answers.action === 'generate_playlist') {
+      console.log('🎵 === GENERAZIONE PLAYLIST ===');
+      
+      // Ottieni token Spotify
+      const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+        },
+        body: 'grant_type=client_credentials'
+      });
+      
+      if (!tokenResponse.ok) {
+        throw new Error(`Token request failed: ${tokenResponse.status}`);
+      }
+      
+      const tokenData = await tokenResponse.json();
+      const token = tokenData.access_token;
+      
+      const playlist = await generatePlaylistFromTrack(
+        token,
+        answers.trackId,
+        answers.trackArtist,
+        answers.trackGenre,
+        answers
+      );
+      
+      return {
+        statusCode: 200,
+        headers: { 
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          playlist: playlist,
+          message: `Generated playlist with ${playlist.length} tracks`,
+          success: true
+        })
+      };
+    }
+    
+    // Ottieni token Spotify
+    console.log('🔑 Richiedendo token Spotify...');
+    const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+      },
+      body: 'grant_type=client_credentials'
+    });
+    
+    if (!tokenResponse.ok) {
+      throw new Error(`Token request failed: ${tokenResponse.status}`);
+    }
+    
+    const tokenData = await tokenResponse.json();
+    const token = tokenData.access_token;
+    console.log('✅ Token Spotify ottenuto');
+    
+    // Calcola audio features del mood
+    const moodFeatures = getAudioFeatures(answers);
+    const selectedGenre = answers.genre || 'pop';
+    const genreProfile = genreProfiles[selectedGenre] || genreProfiles['pop'];
+    
+    console.log(`🎯 Genere selezionato: "${selectedGenre}"`);
+    console.log(`🎼 Seeds disponibili: [${genreProfile.seeds.join(', ')}]`);
+    console.log(`🎵 Audio features mood:`, moodFeatures);
+    console.log(`🎸 Audio features genere:`, genreProfile.audioFeatures);
+    
+    let tracks = [];
+    
+    // STRATEGIA 1: Recommendations API con profilo genere + mood
+    try {
+      console.log('📡 Tentativo 1: Recommendations API Enhanced...');
+      
+      const recParams = buildRecommendationParams(genreProfile, moodFeatures);
+      
+      // Log per debug
+      console.log('🎯 Parametri recommendations:', recParams);
+      
+      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(recParams)}`;
+      
+      console.log('🔗 URL Recommendations:', recommendationsUrl);
+      
+      const recResponse = await fetch(recommendationsUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      console.log(`📊 Recommendations response status: ${recResponse.status}`);
+      
+      if (recResponse.ok) {
+        const recData = await recResponse.json();
+        console.log(`🎵 Recommendations trovate: ${recData.tracks?.length || 0}`);
+        
+        if (recData.tracks && recData.tracks.length > 0) {
+          tracks = recData.tracks.map(track => ({
+            name: track.name,
+            artist: track.artists[0].name,
+            url: track.external_urls.spotify,
+            image: track.album.images[1]?.url || track.album.images[0]?.url,
+            popularity: track.popularity,
+            preview_url: track.preview_url,
+            id: track.id,
+            genres: track.artists[0].genres || [],
+            source: 'recommendations-enhanced'
+          }));
+          console.log(`✅ SUCCESSO con Recommendations Enhanced: ${tracks.length} canzoni`);
+          
+          // Log delle prime 3 canzoni per debug
+          tracks.slice(0, 3).forEach((track, i) => {
+            console.log(`🎵 Track ${i+1}: "${track.name}" by ${track.artist} (pop: ${track.popularity})`);
+          });
+        }
+      } else {
+        const errorText = await recResponse.text();
+        console.log(`❌ Recommendations error: ${recResponse.status} - ${errorText}`);
+      }
+    } catch (error) {
+      console.log('❌ Recommendations Enhanced error:', error.message);
+    }
+    
+    // STRATEGIA 2: Search API con termini specifici del genere
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 2: Search API con termini specifici...');
+      
+      // Prova prima con i termini più specifici
+      const priorityTerms = genreProfile.searchTerms.slice(0, 2);
+      
+      for (const searchTerm of priorityTerms) {
+        try {
+          console.log(`🔍 Cercando: "${searchTerm}"`);
+          
+          // Cerca con filtro genere più specifico
+          const genreQuery = `${searchTerm} genre:"${selectedGenre}"`;
+          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(genreQuery)}&type=track&limit=20`;
+          const searchResponse = await fetch(searchUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          console.log(`📊 Search "${searchTerm}" status: ${searchResponse.status}`);
+          
+          if (searchResponse.ok) {
+            const searchData = await searchResponse.json();
+            console.log(`🎵 Search "${searchTerm}" trovate: ${searchData.tracks.items?.length || 0}`);
+            
+            if (searchData.tracks.items.length > 0) {
+              tracks = searchData.tracks.items.map(track => ({
+                name: track.name,
+                artist: track.artists[0].name,
+                url: track.external_urls.spotify,
+                image: track.album.images[1]?.url || track.album.images[0]?.url,
+                popularity: track.popularity,
+                preview_url: track.preview_url,
+                id: track.id,
+                genres: track.artists[0].genres || [],
+                source: `search-${searchTerm}`
+              }));
+              console.log(`✅ SUCCESSO con Search "${searchTerm}": ${tracks.length} canzoni`);
+              break;
+            }
+          } else {
+            console.log(`❌ Search "${searchTerm}" failed: ${searchResponse.status}`);
+          }
+        } catch (error) {
+          console.log(`❌ Search "${searchTerm}" error:`, error.message);
+          continue;
+        }
+      }
+    }
+    
+    // STRATEGIA 3: Recommendations API base (fallback)
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 3: Recommendations API base...');
+      
+      const basicParams = {
+        seed_genres: genreProfile.seeds.slice(0, 1).join(','), // Solo 1 genere per essere più specifici
+        limit: 20,
+        min_popularity: 30, // Popolarità più alta per qualità
+        ...genreProfile.audioFeatures // Usa le caratteristiche del genere
+      };
+      
+      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(basicParams)}`;
+      const recResponse = await fetch(recommendationsUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (recResponse.ok) {
+        const recData = await recResponse.json();
+        if (recData.tracks && recData.tracks.length > 0) {
+          tracks = recData.tracks.map(track => ({
+            name: track.name,
+            artist: track.artists[0].name,
+            url: track.external_urls.spotify,
+            image: track.album.images[1]?.url || track.album.images[0]?.url,
+            popularity: track.popularity,
+            preview_url: track.preview_url,
+            id: track.id,
+            genres: track.artists[0].genres || [],
+            source: 'recommendations-basic'
+          }));
+          console.log(`✅ Fallback Recommendations: ${tracks.length} canzoni`);
+        }
+      }
+    }
+    
+    // STRATEGIA 4: Search generico (ultimo fallback)
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 4: Search generico...');
+      
+      // Search più specifico per genere
+      const fallbackQuery = `genre:"${selectedGenre}" year:2020-2024`; // Canzoni recenti del genere
+      const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=20`;
+      const searchResponse = await fetch(searchUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        tracks = searchData.tracks.items.map(track => ({
+          name: track.name,
+          artist: track.artists[0].name,
+          url: track.external_urls.spotify,
+          image: track.album.images[1]?.url || track.album.images[0]?.url,
+          popularity: track.popularity,
+          preview_url: track.preview_url,
+          id: track.id,
+          genres: track.artists[0].genres || [],
+          source: 'search-generic'
+        }));
+        console.log(`✅ Search generico: ${tracks.length} canzoni`);
+      }
+    }
+    
+    // Rimuovi duplicati e filtra per qualità
+    const uniqueTracks = [];
+    const seen = new Set();
+    
+    for (const track of tracks) {
+      const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
+      if (!seen.has(key) && track.popularity >= 20 && 
+          !track.artist.toLowerCase().includes('hunter')) { // Blocca HUNTER/X
+        seen.add(key);
+        uniqueTracks.push(track);
+      }
+    }
+    
+    // Ordina per rilevanza del genere e popolarità
+    uniqueTracks.sort((a, b) => {
+      // Priorità per source (recommendations > search)
+      const sourceWeight = {
+        'recommendations-enhanced': 100,
+        'recommendations-basic': 80,
+        'search-genre-specific': 90, // Nuovo peso alto per search con genere
+        'search-generic': 40
+      };
+      
+      let aWeight = sourceWeight[a.source] || 0;
+      let bWeight = sourceWeight[b.source] || 0;
+      
+      // Bonus se il genere è nel nome dell'artista o nelle info
+      if (a.genres && a.genres.some(g => g.includes(selectedGenre))) aWeight += 20;
+      if (b.genres && b.genres.some(g => g.includes(selectedGenre))) bWeight += 20;
+      
+      if (aWeight !== bWeight) return bWeight - aWeight;
+      
+      // Poi per popolarità
+      return (b.popularity || 0) - (a.popularity || 0);
+    });
+    
+    console.log(`🎵 === RISULTATO FINALE ENHANCED ===`);
+    console.log(`📊 Canzoni uniche trovate: ${uniqueTracks.length}`);
+    console.log(`🎯 Genere richiesto: ${selectedGenre}`);
+    console.log(`🎸 Profilo genere usato:`, genreProfile.audioFeatures);
+    console.log(`🔗 Prima canzone: ${uniqueTracks[0]?.name} - ${uniqueTracks[0]?.artist} (source: ${uniqueTracks[0]?.source})`);
+    
+    return {
+      statusCode: 200,
+      headers: { 
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        tracks: uniqueTracks,
+        audioFeatures: moodFeatures,
+        genreProfile: genreProfile.audioFeatures,
+        requestedGenre: selectedGenre,
+        usedSeeds: genreProfile.seeds,
+        searchTerms: genreProfile.searchTerms,
+        message: `Found ${uniqueTracks.length} tracks with enhanced genre precision`,
+        success: true
+      })
+    };
+    
+  } catch (error) {
+    console.error('💥 === ERRORE FINALE ENHANCED ===');
+    console.error('❌ Error:', error.message);
+    
+    return {
+      statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ 
+        error: error.message, 
+        tracks: [],
+        success: false
+      })
+    };
+  }
+};
