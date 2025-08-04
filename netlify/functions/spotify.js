@@ -242,9 +242,9 @@ exports.handler = async (event, context) => {
       
       const searchQueries = [
         `genre:"${selectedGenre}"`,
-        `genre:${validGenres[0]}`,
+       `genre:"${validGenres[0]}"`,
         selectedGenre,
-        validGenres[0]
+       `"${validGenres[0]}"`
       ];
       
       for (const query of searchQueries) {
