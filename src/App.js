@@ -139,9 +139,6 @@ const MusicMoodMatcher = () => {
   };
 
   // Chiamata alla Netlify Function
-  const searchSpotify = async (tags) => {
-    try {
-      console.log(`🎵 Chiamando Netlify Function...`);
       console.log('📍 URL completo:', window.location.origin);
       
       const params = new URLSearchParams({
@@ -150,7 +147,9 @@ const MusicMoodMatcher = () => {
         energy: answers.energy || 'medium',
         time: answers.time || 'evening',
         genre: answers.genre || 'pop',
-        tags: tags.join(',')
+        tags: tags.join(','),
+        isPlaylist: isPlaylistGeneration ? 'true' : 'false',
+        seedTrack: seedTrack || ''
       });
       
       const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
@@ -176,31 +175,26 @@ const MusicMoodMatcher = () => {
       const data = JSON.parse(responseText);
       
       if (data.tracks && data.tracks.length > 0) {
-        console.log(`✅ Netlify Function: trovate ${data.tracks.length} canzoni`);
-        return data.tracks.map(track => ({
-          ...track,
           score: Math.random() * 100 + (track.popularity || 50)
         }));
       }
       
-      throw new Error('Nessuna canzone trovata dalla function');
+      throw new Error(`Nessuna ${isPlaylistGeneration ? 'playlist' : 'canzone'} trovata dalla function`);
       
     } catch (error) {
-      console.error('Errore nella Netlify Function:', error);
+      console.error(`Errore nella Netlify Function${isPlaylistGeneration ? ' (playlist)' : ''}:`, error);
       
-      console.log('🔄 Usando fallback locale...');
-      return getFallbackTracks();
+      if (!isPlaylistGeneration) {
+        console.log('🔄 Usando fallback locale...');
+        return getFallbackTracks();
+      } else {
+        throw error;
+      }
     }
   };
 
   // Fallback locale
   const getFallbackTracks = () => {
-    const tracks = [
-      { name: "Blinding Lights", artist: "The Weeknd", url: "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b", popularity: 95 },
-      { name: "Levitating", artist: "Dua Lipa", url: "https://open.spotify.com/track/39LLxExYz6ewLAcYrzQQyP", popularity: 90 },
-      { name: "Good 4 U", artist: "Olivia Rodrigo", url: "https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG", popularity: 88 },
-      { name: "Stay", artist: "The Kid LAROI & Justin Bieber", url: "https://open.spotify.com/track/5PjdY0CKGZdEuoNab3yDmX", popularity: 87 },
-      { name: "Industry Baby", artist: "Lil Nas X & Jack Harlow", url: "https://open.spotify.com/track/27NovPIUIRrOZoCHxABJwK", popularity: 86 }
     ];
     
     return tracks.map(track => ({
@@ -611,28 +605,27 @@ const MusicMoodMatcher = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <a
-                      href={recommendation.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
                     >
                       <Play className="w-5 h-5" />
                       Apri su Spotify
                     </a>
-                    {recommendation.preview_url ? (
-                      <audio
-                        controls
-                        src={recommendation.preview_url}
-                        className="w-full h-12 rounded-xl"
-                        style={{ filter: 'sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%)' }}
-                      >
-                        Il tuo browser non supporta l'audio.
-                      </audio>
-                    ) : (
-                      <div className="flex items-center justify-center px-6 py-4 bg-gray-100 text-gray-500 rounded-xl">
-                        <span className="text-sm">Preview non disponibile</span>
-                      </div>
-                    )}
+                    <button
+                      onClick={generatePlaylist}
+                      disabled={isGeneratingPlaylist}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-xl transition-colors font-medium"
+                    >
+                      {isGeneratingPlaylist ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Generando...
+                        </>
+                      ) : (
+                        <>
+                          <Music className="w-5 h-5" />
+                          Genera Playlist
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -656,6 +649,67 @@ const MusicMoodMatcher = () => {
                 </div>
               </div>
             </div>
+
+            {playlist && (
+              <div className="mt-8 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-8">
+                  <div className="text-center mb-6">
+                    <h3 className="text-2xl font-light text-gray-900 mb-2">
+                      La tua Playlist
+                    </h3>
+                    <p className="text-gray-600">
+                      {playlist.length} brani selezionati per te
+                    </p>
+                  </div>
+
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {playlist.map((track, index) => (
+                      <div key={`${track.id}-${index}`} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm font-medium">
+                          {index + 1}
+                        </div>
+                        {track.image ? (
+                          <img 
+                            src={track.image} 
+                            alt={`${track.name} cover`}
+                            className="w-12 h-12 rounded-lg object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center ${track.image ? 'hidden' : ''}`}>
+                          <Music className="w-5 h-5 text-gray-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-gray-900 truncate">
+                            {track.name}
+                          </h4>
+                          <p className="text-sm text-gray-600 truncate">
+                            {track.artist}
+                          </p>
+                        </div>
+                        <a
+                          href={track.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-shrink-0 p-2 text-gray-400 hover:text-green-500 transition-colors"
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 text-center">
+                    <p className="text-sm text-gray-500 mb-4">
+                      Clicca sui link per aprire le canzoni su Spotify
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
