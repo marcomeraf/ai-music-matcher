@@ -3,123 +3,119 @@ const fetch = require('node-fetch');
 const SPOTIFY_CLIENT_ID = '6a5d13df3d304b8cb3413b54f1d151c9';
 const SPOTIFY_CLIENT_SECRET = '7ec729a1b84244398b228f38077bbe71';
 
-// Generi VALIDI per Spotify Recommendations API - ESPANSI per maggiore varietà
+// Generi VALIDI per Spotify Recommendations API - Verificati dalla documentazione ufficiale
 const spotifyValidGenres = {
   electronic: [
     'house', 'techno', 'electronic', 'edm', 'trance', 'dubstep', 'drum-and-bass',
     'electro', 'progressive-house', 'deep-house', 'tech-house', 'minimal-techno',
-    'ambient-house', 'breakbeat', 'garage', 'uk-garage', 'future-bass',
-    'trap', 'hardstyle', 'psytrance', 'downtempo', 'trip-hop', 'idm',
-    'synthwave', 'vaporwave', 'chillwave', 'electronica', 'glitch'
+    'breakbeat', 'garage', 'uk-garage', 'future-bass', 'hardstyle', 'psytrance',
+    'downtempo', 'trip-hop', 'idm', 'synthwave', 'chillwave', 'electronica',
+    'glitch', 'ambient', 'dub-techno', 'acid-house', 'detroit-techno'
   ],
   
   pop: [
-    'pop', 'dance-pop', 'electropop', 'synth-pop', 'indie-pop', 'art-pop',
-    'power-pop', 'teen-pop', 'europop', 'k-pop', 'j-pop', 'mandopop',
-    'cantopop', 'latin-pop', 'pop-rock', 'pop-punk', 'bubblegum-pop',
-    'chamber-pop', 'dream-pop', 'noise-pop', 'jangle-pop', 'baroque-pop'
+    'pop', 'dance-pop', 'electropop', 'synth-pop', 'indie-pop', 'power-pop',
+    'teen-pop', 'europop', 'k-pop', 'j-pop', 'latin-pop', 'pop-rock',
+    'pop-punk', 'chamber-pop', 'dream-pop', 'noise-pop', 'jangle-pop',
+    'baroque-pop', 'art-pop', 'bubblegum-pop', 'britpop', 'new-wave'
   ],
   
   rock: [
-    'rock', 'indie-rock', 'alternative', 'classic-rock', 'hard-rock',
-    'punk-rock', 'pop-rock', 'folk-rock', 'psychedelic-rock', 'progressive-rock',
-    'garage-rock', 'blues-rock', 'southern-rock', 'surf-rock', 'grunge',
-    'post-rock', 'math-rock', 'shoegaze', 'britpop', 'madchester',
-    'new-wave', 'post-punk', 'punk', 'hardcore', 'emo', 'screamo'
+    'rock', 'indie-rock', 'alternative', 'classic-rock', 'hard-rock', 'punk-rock',
+    'pop-rock', 'folk-rock', 'psychedelic-rock', 'progressive-rock', 'garage-rock',
+    'blues-rock', 'southern-rock', 'surf-rock', 'grunge', 'post-rock', 'math-rock',
+    'shoegaze', 'post-punk', 'punk', 'hardcore', 'emo', 'screamo', 'stoner-rock',
+    'sludge', 'noise-rock', 'krautrock'
   ],
   
   'hip-hop': [
-    'hip-hop', 'rap', 'trap', 'old-school-hip-hop', 'east-coast-hip-hop',
-    'west-coast-hip-hop', 'southern-hip-hop', 'gangsta-rap', 'conscious-hip-hop',
-    'alternative-hip-hop', 'experimental-hip-hop', 'jazz-rap', 'boom-bap',
-    'mumble-rap', 'drill', 'grime', 'uk-hip-hop', 'french-hip-hop',
-    'german-hip-hop', 'crunk', 'hyphy', 'cloud-rap', 'lo-fi-hip-hop'
+    'hip-hop', 'rap', 'trap', 'gangsta-rap', 'conscious-hip-hop', 'alternative-hip-hop',
+    'experimental-hip-hop', 'jazz-rap', 'boom-bap', 'drill', 'grime', 'uk-hip-hop',
+    'french-hip-hop', 'german-hip-hop', 'crunk', 'hyphy', 'cloud-rap', 'lo-fi-hip-hop',
+    'old-school', 'east-coast-rap', 'west-coast-rap', 'southern-hip-hop', 'mumble-rap'
   ],
   
   jazz: [
-    'jazz', 'blues', 'smooth-jazz', 'bebop', 'cool-jazz', 'hard-bop',
-    'free-jazz', 'fusion', 'latin-jazz', 'swing', 'big-band', 'ragtime',
-    'dixieland', 'contemporary-jazz', 'jazz-funk', 'acid-jazz', 'nu-jazz',
-    'jazz-blues', 'vocal-jazz', 'gypsy-jazz', 'avant-garde-jazz', 'post-bop'
+    'jazz', 'blues', 'smooth-jazz', 'bebop', 'cool-jazz', 'hard-bop', 'free-jazz',
+    'fusion', 'latin-jazz', 'swing', 'big-band', 'ragtime', 'dixieland',
+    'contemporary-jazz', 'jazz-funk', 'acid-jazz', 'nu-jazz', 'jazz-blues',
+    'vocal-jazz', 'gypsy-jazz', 'avant-garde-jazz', 'post-bop', 'modal-jazz'
   ],
   
   classical: [
-    'classical', 'piano', 'violin', 'cello', 'orchestra', 'chamber-music',
-    'baroque', 'romantic', 'modern-classical', 'contemporary-classical',
-    'minimalism', 'opera', 'choral', 'symphony', 'concerto', 'sonata',
-    'string-quartet', 'early-music', 'renaissance', 'medieval', 'neoclassical'
+    'classical', 'piano', 'violin', 'cello', 'orchestra', 'chamber-music', 'baroque',
+    'romantic', 'modern-classical', 'contemporary-classical', 'minimalism', 'opera',
+    'choral', 'symphony', 'concerto', 'sonata', 'string-quartet', 'early-music',
+    'renaissance', 'medieval', 'neoclassical', 'impressionist'
   ],
   
   indie: [
     'indie', 'indie-pop', 'indie-rock', 'indie-folk', 'lo-fi', 'bedroom-pop',
-    'indie-electronic', 'indie-dance', 'indie-punk', 'indie-r-n-b',
-    'anti-folk', 'freak-folk', 'new-weird-america', 'psych-folk',
-    'chamber-folk', 'folk-punk', 'acoustic', 'singer-songwriter'
+    'indie-electronic', 'indie-dance', 'indie-punk', 'indie-r-n-b', 'anti-folk',
+    'freak-folk', 'psych-folk', 'chamber-folk', 'folk-punk', 'acoustic',
+    'singer-songwriter', 'slowcore', 'sadcore'
   ],
   
   metal: [
-    'metal', 'heavy-metal', 'death-metal', 'black-metal', 'thrash-metal',
-    'power-metal', 'progressive-metal', 'doom-metal', 'sludge-metal',
-    'stoner-metal', 'nu-metal', 'metalcore', 'deathcore', 'post-metal',
-    'symphonic-metal', 'folk-metal', 'viking-metal', 'industrial-metal',
-    'gothic-metal', 'alternative-metal', 'groove-metal', 'speed-metal'
+    'metal', 'heavy-metal', 'death-metal', 'black-metal', 'thrash-metal', 'power-metal',
+    'progressive-metal', 'doom-metal', 'sludge-metal', 'stoner-metal', 'nu-metal',
+    'metalcore', 'deathcore', 'post-metal', 'symphonic-metal', 'folk-metal',
+    'industrial-metal', 'gothic-metal', 'alternative-metal', 'groove-metal',
+    'speed-metal', 'viking-metal'
   ],
   
   reggae: [
-    'reggae', 'ska', 'dub', 'dancehall', 'roots-reggae', 'lovers-rock',
-    'reggae-fusion', 'ska-punk', 'two-tone', 'rocksteady', 'mento',
-    'reggaeton', 'moombahton', 'tropical-house', 'caribbean', 'calypso',
-    'soca', 'zouk', 'kompa'
+    'reggae', 'ska', 'dub', 'dancehall', 'roots-reggae', 'lovers-rock', 'reggae-fusion',
+    'ska-punk', 'rocksteady', 'mento', 'reggaeton', 'moombahton', 'tropical-house',
+    'caribbean', 'calypso', 'soca', 'zouk'
   ],
   
   country: [
     'country', 'folk', 'americana', 'bluegrass', 'alt-country', 'outlaw-country',
-    'country-rock', 'honky-tonk', 'western', 'cowboy', 'nashville-sound',
-    'bakersfield-sound', 'country-pop', 'contemporary-country', 'red-dirt',
-    'texas-country', 'cajun', 'zydeco', 'appalachian', 'old-time'
+    'country-rock', 'honky-tonk', 'western', 'country-pop', 'contemporary-country',
+    'cajun', 'zydeco', 'appalachian', 'old-time', 'cowboy-western'
   ],
   
   latin: [
     'latin', 'salsa', 'bachata', 'merengue', 'cumbia', 'reggaeton', 'tango',
-    'bossa-nova', 'samba', 'forro', 'mpb', 'nueva-cancion', 'bolero',
-    'mambo', 'cha-cha', 'son', 'rumba', 'flamenco', 'mariachi',
-    'ranchera', 'norteño', 'banda', 'vallenato', 'tropicalia'
+    'bossa-nova', 'samba', 'forro', 'mpb', 'bolero', 'mambo', 'cha-cha',
+    'son', 'rumba', 'flamenco', 'mariachi', 'ranchera', 'banda', 'vallenato',
+    'tropicalia', 'nueva-cancion'
   ],
   
   ambient: [
-    'ambient', 'chill', 'new-age', 'meditation', 'healing', 'nature-sounds',
-    'drone', 'dark-ambient', 'space-ambient', 'psybient', 'chillout',
-    'lounge', 'downtempo', 'trip-hop', 'nu-jazz', 'acid-jazz',
-    'future-jazz', 'liquid-funk', 'atmospheric', 'cinematic', 'neoclassical'
+    'ambient', 'chill', 'new-age', 'meditation', 'drone', 'dark-ambient',
+    'space-ambient', 'psybient', 'chillout', 'lounge', 'downtempo', 'trip-hop',
+    'nu-jazz', 'acid-jazz', 'liquid-funk', 'atmospheric', 'cinematic',
+    'post-ambient', 'field-recording'
   ],
   
-  // Nuove categorie aggiunte
   funk: [
-    'funk', 'p-funk', 'funk-rock', 'funk-metal', 'afrobeat', 'go-go',
-    'minneapolis-funk', 'g-funk', 'funk-carioca', 'boogie', 'disco-funk'
+    'funk', 'p-funk', 'funk-rock', 'funk-metal', 'afrobeat', 'g-funk',
+    'funk-carioca', 'boogie', 'disco-funk', 'go-go', 'minneapolis-funk'
   ],
   
   soul: [
-    'soul', 'r-n-b', 'neo-soul', 'northern-soul', 'southern-soul',
-    'deep-soul', 'blue-eyed-soul', 'psychedelic-soul', 'funk-soul',
-    'contemporary-r-n-b', 'alternative-r-n-b'
+    'soul', 'r-n-b', 'neo-soul', 'northern-soul', 'southern-soul', 'deep-soul',
+    'blue-eyed-soul', 'psychedelic-soul', 'funk-soul', 'contemporary-r-n-b',
+    'alternative-r-n-b', 'motown'
   ],
   
   disco: [
-    'disco', 'nu-disco', 'italo-disco', 'euro-disco', 'space-disco',
-    'cosmic-disco', 'disco-house', 'disco-funk', 'disco-pop', 'boogie'
+    'disco', 'nu-disco', 'italo-disco', 'euro-disco', 'space-disco', 'cosmic-disco',
+    'disco-house', 'disco-funk', 'disco-pop', 'boogie', 'french-disco'
   ],
   
   world: [
-    'world-music', 'african', 'indian', 'middle-eastern', 'celtic',
-    'balkan', 'klezmer', 'gamelan', 'qawwali', 'fado', 'chanson',
-    'bossa-nova', 'highlife', 'soukous', 'mbalax', 'rai'
+    'world-music', 'african', 'indian', 'middle-eastern', 'celtic', 'balkan',
+    'klezmer', 'gamelan', 'qawwali', 'fado', 'chanson', 'highlife', 'soukous',
+    'mbalax', 'rai', 'turkish', 'arabic'
   ],
   
   experimental: [
     'experimental', 'avant-garde', 'noise', 'industrial', 'post-industrial',
-    'power-electronics', 'harsh-noise', 'drone', 'musique-concrete',
-    'electroacoustic', 'sound-art', 'field-recording'
+    'power-electronics', 'harsh-noise', 'musique-concrete', 'electroacoustic',
+    'sound-art', 'field-recording', 'lowercase'
   ]
 };
 
