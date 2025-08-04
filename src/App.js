@@ -141,7 +141,8 @@ const MusicMoodMatcher = () => {
   // Chiamata alla Netlify Function
   const searchSpotify = async (tags) => {
     try {
-      console.log(`🎵 Chiamando Netlify Function con mood: ${answers.mood}, genre: ${answers.genre}`);
+      console.log(`🎵 Chiamando Netlify Function...`);
+      console.log('📍 URL completo:', window.location.origin);
       
       const params = new URLSearchParams({
         mood: answers.mood || 'happy',
@@ -152,13 +153,27 @@ const MusicMoodMatcher = () => {
         tags: tags.join(',')
       });
       
-      const response = await fetch(`/api/spotify?${params}`);
+      const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
+      console.log('🔗 Chiamando:', apiUrl);
+      
+      const response = await fetch(apiUrl);
+      console.log('📊 Response status:', response.status);
+      console.log('📋 Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
-        throw new Error(`Function error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        throw new Error(`Function error: ${response.status} - ${errorText}`);
       }
       
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log('📄 Response text (primi 200 char):', responseText.substring(0, 200));
+      
+      if (responseText.startsWith('<!DOCTYPE')) {
+        throw new Error('Ricevuto HTML invece di JSON - Function non trovata');
+      }
+      
+      const data = JSON.parse(responseText);
       
       if (data.tracks && data.tracks.length > 0) {
         console.log(`✅ Netlify Function: trovate ${data.tracks.length} canzoni`);
