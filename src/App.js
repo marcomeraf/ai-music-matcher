@@ -9,6 +9,8 @@ const MusicMoodMatcher = () => {
   const [showResult, setShowResult] = useState(false);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [playlist, setPlaylist] = useState(null);
+  const [isGeneratingPlaylist, setIsGeneratingPlaylist] = useState(false);
 
   const questions = [
     {
@@ -139,6 +141,8 @@ const MusicMoodMatcher = () => {
   };
 
   // Chiamata alla Netlify Function
+  const searchSpotify = async (tags, isPlaylistGeneration = false, seedTrack = '') => {
+    try {
       console.log('📍 URL completo:', window.location.origin);
       
       const params = new URLSearchParams({
@@ -175,6 +179,8 @@ const MusicMoodMatcher = () => {
       const data = JSON.parse(responseText);
       
       if (data.tracks && data.tracks.length > 0) {
+        return data.tracks.map(track => ({
+          ...track,
           score: Math.random() * 100 + (track.popularity || 50)
         }));
       }
@@ -195,16 +201,19 @@ const MusicMoodMatcher = () => {
 
   // Fallback locale
   const getFallbackTracks = () => {
+    const tracks = [
+      {
+        id: 'fallback-1',
+        name: 'Blinding Lights',
+        artist: 'The Weeknd',
+        url: 'https://open.spotify.com/track/0VjIjW4GlULA4LGoDOLVKN',
+        image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&h=300&fit=crop',
+        popularity: 95
+      },
+      {
+        id: 'fallback-2',
+        name: 'Watermelon Sugar',
         artist: 'Harry Styles',
-      setPlaylist(finalPlaylist);
-    } catch (error) {
-      console.error('Errore nella generazione playlist:', error);
-      setError('Errore nella generazione della playlist. Riprova!');
-    } finally {
-      setIsGeneratingPlaylist(false);
-    }
-  };
-
         url: 'https://open.spotify.com/track/6UelLqGlWMcVH1E5c4H7lY',
         image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&h=300&fit=crop',
         popularity: 88
@@ -217,9 +226,12 @@ const MusicMoodMatcher = () => {
         image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&h=300&fit=crop',
         popularity: 92
       }
+    ];
+    
+    return tracks.map(track => ({
       ...track,
       score: Math.random() * 100 + track.popularity
-        return data.tracks.map(track => ({
+    }));
   };
 
   // Audio features
@@ -337,6 +349,31 @@ const MusicMoodMatcher = () => {
     }
   };
 
+  const generatePlaylist = async () => {
+    if (!recommendation) return;
+    
+    setIsGeneratingPlaylist(true);
+    try {
+      const tags = getMoodBasedTags(answers);
+      const playlistTracks = await searchSpotify(tags, true, recommendation.id);
+      
+      // Rimuovi la canzone principale dalla playlist se presente
+      const filteredTracks = playlistTracks.filter(track => track.id !== recommendation.id);
+      
+      // Prendi le prime 10-15 canzoni
+      const finalPlaylist = filteredTracks.slice(0, 12);
+      
+      setPlaylist(finalPlaylist);
+    } catch (error) {
+      console.error('Errore nella generazione playlist:', error);
+      // Fallback: genera una playlist con canzoni simili
+      const fallbackPlaylist = getFallbackTracks().slice(0, 8);
+      setPlaylist(fallbackPlaylist);
+    } finally {
+      setIsGeneratingPlaylist(false);
+    }
+  };
+
   const handleAnswer = (questionId, answer) => {
     const newAnswers = { ...answers, [questionId]: answer };
     setAnswers(newAnswers);
@@ -386,6 +423,8 @@ const MusicMoodMatcher = () => {
     setIsAnalyzing(false);
     setError(null);
     setRetryCount(0);
+    setPlaylist(null);
+    setIsGeneratingPlaylist(false);
   };
 
   const currentQuestion = questions[currentStep];
@@ -624,6 +663,10 @@ const MusicMoodMatcher = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <a
+                      href={recommendation.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
                     >
                       <Play className="w-5 h-5" />
                       Apri su Spotify

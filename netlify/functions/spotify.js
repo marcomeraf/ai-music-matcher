@@ -9,6 +9,8 @@ const MusicMoodMatcher = () => {
   const [showResult, setShowResult] = useState(false);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [playlist, setPlaylist] = useState(null);
+  const [isGeneratingPlaylist, setIsGeneratingPlaylist] = useState(false);
 
   const questions = [
     {
@@ -139,6 +141,8 @@ const MusicMoodMatcher = () => {
   };
 
   // Chiamata alla Netlify Function
+  const searchSpotify = async (tags, isPlaylistGeneration = false, seedTrack = '') => {
+    try {
       console.log('📍 URL completo:', window.location.origin);
       
       const params = new URLSearchParams({
@@ -175,8 +179,25 @@ const MusicMoodMatcher = () => {
       const data = JSON.parse(responseText);
       
       if (data.tracks && data.tracks.length > 0) {
+        const uniqueTracks = data.tracks.filter((track, index, self) => 
+          index === self.findIndex(t => t.id === track.id)
+        ).map(track => ({
+          ...track,
           score: Math.random() * 100 + (track.popularity || 50)
         }));
+        
+        console.log(`🎵 === RISULTATO FINALE ${isPlaylistGeneration ? 'PLAYLIST' : 'ENHANCED'} ===`);
+        console.log(`🎵 Trovate ${uniqueTracks.length} tracce uniche`);
+        if (isPlaylistGeneration) console.log(`🎵 Seed track: ${seedTrack}`);
+        console.log({
+          totalTracks: uniqueTracks.length,
+          isPlaylist: isPlaylistGeneration,
+          seedTrack: seedTrack,
+          message: `Found ${uniqueTracks.length} tracks ${isPlaylistGeneration ? 'for playlist' : 'with enhanced genre precision'}`,
+          firstTrack: uniqueTracks[0] ? `${uniqueTracks[0].name} by ${uniqueTracks[0].artist}` : 'None'
+        });
+        
+        return uniqueTracks.sort((a, b) => b.score - a.score);
       }
       
       throw new Error(`Nessuna ${isPlaylistGeneration ? 'playlist' : 'canzone'} trovata dalla function`);
@@ -195,6 +216,15 @@ const MusicMoodMatcher = () => {
 
   // Fallback locale
   const getFallbackTracks = () => {
+    const fallbackTracks = [
+      { id: 'fallback1', name: 'Blinding Lights', artist: 'The Weeknd', url: 'https://open.spotify.com/track/0VjIjW4GlULA4LGvF2BoA2', popularity: 95, image: null },
+      { id: 'fallback2', name: 'Watermelon Sugar', artist: 'Harry Styles', url: 'https://open.spotify.com/track/6UelLqGlWMcVH1E5c4H7lY', popularity: 90, image: null },
+      { id: 'fallback3', name: 'Good 4 U', artist: 'Olivia Rodrigo', url: 'https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG', popularity: 88, image: null },
+      { id: 'fallback4', name: 'Levitating', artist: 'Dua Lipa', url: 'https://open.spotify.com/track/463CkQjx2Zk1yXoBuierM9', popularity: 92, image: null },
+      { id: 'fallback5', name: 'Stay', artist: 'The Kid LAROI & Justin Bieber', url: 'https://open.spotify.com/track/5PjdY0CKGZdEuoNab3yDmX', popularity: 89, image: null }
+    ];
+    
+    return fallbackTracks.map(track => ({
       ...track,
       score: Math.random() * 100 + track.popularity
     })).sort((a, b) => b.score - a.score);
@@ -206,7 +236,7 @@ const MusicMoodMatcher = () => {
     
     switch (answers.mood) {
       case 'happy': valence = 0.8; energy = 0.7; danceability = 0.8; tempo = 128; break;
-    console.log(`🎵 === RISULTATO FINALE ${isPlaylistGeneration ? 'PLAYLIST' : 'ENHANCED'} ===`);
+      case 'calm': valence = 0.6; energy = 0.3; danceability = 0.4; tempo = 95; break;
       case 'melancholic': valence = 0.2; energy = 0.4; danceability = 0.3; tempo = 85; break;
       case 'motivated': valence = 0.7; energy = 0.9; danceability = 0.6; tempo = 140; break;
       case 'nostalgic': valence = 0.5; energy = 0.5; danceability = 0.5; tempo = 110; break;
@@ -222,15 +252,12 @@ const MusicMoodMatcher = () => {
     switch (answers.energy) {
       case 'high': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 125); break;
       case 'low': energy = Math.max(0.1, energy - 0.3); tempo = Math.min(tempo, 95); break;
-    if (isPlaylistGeneration) console.log(`🎵 Seed track: ${seedTrack}`);
       case 'medium': energy = Math.max(0.4, Math.min(0.7, energy)); break;
     }
     
     return {
       valence: valence.toFixed(2),
-        isPlaylist: isPlaylistGeneration,
-        seedTrack: seedTrack,
-        message: `Found ${uniqueTracks.length} tracks ${isPlaylistGeneration ? 'for playlist' : 'with enhanced genre precision'}`,
+      energy: energy.toFixed(2),
       danceability: danceability.toFixed(2),
       tempo: Math.round(tempo)
     };
@@ -315,6 +342,31 @@ const MusicMoodMatcher = () => {
     } catch (error) {
       console.error('Errore nella ricerca:', error);
       throw error;
+    }
+  };
+
+  const generatePlaylist = async () => {
+    if (!recommendation) return;
+    
+    setIsGeneratingPlaylist(true);
+    try {
+      const tags = getMoodBasedTags(answers);
+      const playlistTracks = await searchSpotify(tags, true, recommendation.name);
+      
+      const filteredTracks = playlistTracks
+        .filter(track => track.id !== recommendation.id)
+        .slice(0, 9);
+      
+      const finalPlaylist = [recommendation, ...filteredTracks];
+      setPlaylist(finalPlaylist);
+      
+      console.log('🎵 Playlist generata:', finalPlaylist.length, 'tracce');
+    } catch (error) {
+      console.error('💥 === ERRORE FINALE ===');
+      console.error('Errore generazione playlist:', error);
+      setError('Errore nella generazione della playlist');
+    } finally {
+      setIsGeneratingPlaylist(false);
     }
   };
 
@@ -605,6 +657,10 @@ const MusicMoodMatcher = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <a
+                      href={recommendation.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
                     >
                       <Play className="w-5 h-5" />
                       Apri su Spotify
@@ -702,7 +758,7 @@ const MusicMoodMatcher = () => {
                     ))}
                   </div>
 
-    console.error('💥 === ERRORE FINALE ===');
+                  <div className="mt-6 text-center">
                     <p className="text-sm text-gray-500 mb-4">
                       Clicca sui link per aprire le canzoni su Spotify
                     </p>
