@@ -3,91 +3,162 @@ const fetch = require('node-fetch');
 const SPOTIFY_CLIENT_ID = '6a5d13df3d304b8cb3413b54f1d151c9';
 const SPOTIFY_CLIENT_SECRET = '7ec729a1b84244398b228f38077bbe71';
 
-// Generi VALIDI per Spotify Recommendations API - Verificati dalla documentazione ufficiale
-const spotifyValidGenres = {
-  electronic: [
-    'house', 'techno', 'electronic', 'edm', 'trance', 'dubstep', 'drum-and-bass',
-    'electro', 'progressive-house', 'deep-house', 'tech-house', 'minimal-techno',
-    'breakbeat', 'garage', 'uk-garage', 'future-bass', 'hardstyle', 'psytrance',
-    'downtempo', 'trip-hop', 'idm', 'synthwave', 'chillwave', 'electronica'
-  ],
+// Generi VALIDI per Spotify Recommendations API con audio features specifiche
+const genreProfiles = {
+  electronic: {
+    seeds: ['house', 'techno', 'electronic', 'edm', 'trance'],
+    searchTerms: ['electronic music', 'EDM', 'house music', 'techno', 'trance', 'dubstep'],
+    audioFeatures: {
+      min_energy: 0.6,
+      max_acousticness: 0.2,
+      min_danceability: 0.6,
+      min_tempo: 110,
+      max_tempo: 140,
+      max_instrumentalness: 0.8
+    }
+  },
   
-  pop: [
-    'pop', 'dance-pop', 'electropop', 'synth-pop', 'indie-pop', 'power-pop',
-    'teen-pop', 'europop', 'k-pop', 'j-pop', 'latin-pop', 'pop-rock',
-    'pop-punk', 'chamber-pop', 'dream-pop', 'noise-pop', 'jangle-pop',
-    'baroque-pop', 'art-pop', 'bubblegum-pop', 'britpop', 'new-wave'
-  ],
+  pop: {
+    seeds: ['pop', 'dance-pop', 'electropop', 'indie-pop'],
+    searchTerms: ['pop music', 'top hits', 'radio hits', 'mainstream pop'],
+    audioFeatures: {
+      min_energy: 0.4,
+      max_energy: 0.9,
+      min_danceability: 0.5,
+      min_valence: 0.4,
+      min_popularity: 40,
+      min_tempo: 90,
+      max_tempo: 130
+    }
+  },
   
-  rock: [
-    'rock', 'indie-rock', 'alternative', 'classic-rock', 'hard-rock', 'punk-rock',
-    'pop-rock', 'folk-rock', 'psychedelic-rock', 'progressive-rock', 'garage-rock',
-    'blues-rock', 'southern-rock', 'surf-rock', 'grunge', 'post-rock', 'math-rock',
-    'shoegaze', 'post-punk', 'punk', 'hardcore', 'emo', 'screamo', 'stoner-rock',
-    'sludge', 'noise-rock', 'krautrock'
-  ],
+  rock: {
+    seeds: ['rock', 'indie-rock', 'alternative', 'classic-rock'],
+    searchTerms: ['rock music', 'indie rock', 'alternative rock', 'guitar music'],
+    audioFeatures: {
+      min_energy: 0.5,
+      max_acousticness: 0.4,
+      min_loudness: -12,
+      max_danceability: 0.7,
+      min_tempo: 90,
+      max_tempo: 150
+    }
+  },
   
-  'hip-hop': [
-    'hip-hop', 'rap', 'trap', 'gangsta-rap', 'conscious-hip-hop', 'alternative-hip-hop',
-    'experimental-hip-hop', 'jazz-rap', 'boom-bap', 'drill', 'grime', 'uk-hip-hop',
-    'french-hip-hop', 'german-hip-hop', 'crunk', 'hyphy', 'cloud-rap', 'lo-fi-hip-hop',
-    'old-school', 'east-coast-rap', 'west-coast-rap', 'southern-hip-hop', 'mumble-rap'
-  ],
+  'hip-hop': {
+    seeds: ['hip-hop', 'rap', 'trap'],
+    searchTerms: ['hip hop', 'rap music', 'trap music', 'urban music'],
+    audioFeatures: {
+      min_energy: 0.6,
+      min_speechiness: 0.3,
+      min_danceability: 0.6,
+      max_acousticness: 0.2,
+      min_tempo: 70,
+      max_tempo: 140
+    }
+  },
   
-  jazz: [
-    'jazz', 'blues', 'smooth-jazz', 'bebop', 'cool-jazz', 'hard-bop', 'free-jazz',
-    'fusion', 'latin-jazz', 'swing', 'big-band', 'ragtime', 'dixieland',
-    'contemporary-jazz', 'jazz-funk', 'acid-jazz', 'nu-jazz', 'jazz-blues',
-    'vocal-jazz', 'gypsy-jazz', 'avant-garde-jazz', 'post-bop', 'modal-jazz'
-  ],
+  jazz: {
+    seeds: ['jazz', 'smooth-jazz', 'blues', 'swing'],
+    searchTerms: ['jazz music', 'smooth jazz', 'jazz fusion', 'contemporary jazz'],
+    audioFeatures: {
+      min_acousticness: 0.3,
+      max_danceability: 0.6,
+      min_instrumentalness: 0.2,
+      max_energy: 0.7,
+      min_tempo: 60,
+      max_tempo: 180
+    }
+  },
   
-  classical: [
-    'classical', 'piano', 'violin', 'cello', 'orchestra', 'chamber-music', 'baroque',
-    'romantic', 'modern-classical', 'contemporary-classical', 'minimalism', 'opera',
-    'choral', 'symphony', 'concerto', 'sonata', 'string-quartet', 'early-music',
-    'renaissance', 'medieval', 'neoclassical', 'impressionist'
-  ],
+  classical: {
+    seeds: ['classical', 'piano', 'orchestra'],
+    searchTerms: ['classical music', 'orchestra', 'piano classical', 'symphony'],
+    audioFeatures: {
+      min_acousticness: 0.7,
+      max_danceability: 0.3,
+      min_instrumentalness: 0.5,
+      max_energy: 0.6,
+      max_loudness: -15,
+      min_tempo: 60,
+      max_tempo: 140
+    }
+  },
   
-  indie: [
-    'indie', 'indie-pop', 'indie-rock', 'indie-folk', 'lo-fi', 'bedroom-pop',
-    'indie-electronic', 'indie-dance', 'indie-punk', 'indie-r-n-b', 'anti-folk',
-    'freak-folk', 'psych-folk', 'chamber-folk', 'folk-punk', 'acoustic',
-    'singer-songwriter', 'slowcore', 'sadcore'
-  ],
+  indie: {
+    seeds: ['indie', 'indie-pop', 'indie-rock', 'indie-folk'],
+    searchTerms: ['indie music', 'independent music', 'indie folk', 'bedroom pop'],
+    audioFeatures: {
+      max_popularity: 70,
+      min_acousticness: 0.2,
+      max_danceability: 0.7,
+      min_valence: 0.3,
+      min_tempo: 80,
+      max_tempo: 130
+    }
+  },
   
-  metal: [
-    'metal', 'heavy-metal', 'death-metal', 'black-metal', 'thrash-metal', 'power-metal',
-    'progressive-metal', 'doom-metal', 'sludge-metal', 'stoner-metal', 'nu-metal',
-    'metalcore', 'deathcore', 'post-metal', 'symphonic-metal', 'folk-metal',
-    'industrial-metal', 'gothic-metal', 'alternative-metal', 'groove-metal',
-    'speed-metal', 'viking-metal'
-  ],
+  metal: {
+    seeds: ['metal', 'heavy-metal', 'death-metal', 'black-metal'],
+    searchTerms: ['metal music', 'heavy metal', 'death metal', 'metalcore'],
+    audioFeatures: {
+      min_energy: 0.8,
+      min_loudness: -8,
+      max_acousticness: 0.1,
+      max_danceability: 0.6,
+      min_tempo: 120,
+      max_tempo: 200
+    }
+  },
   
-  reggae: [
-    'reggae', 'ska', 'dub', 'dancehall', 'roots-reggae', 'lovers-rock', 'reggae-fusion',
-    'ska-punk', 'rocksteady', 'mento', 'reggaeton', 'moombahton', 'tropical-house',
-    'caribbean', 'calypso', 'soca', 'zouk'
-  ],
+  reggae: {
+    seeds: ['reggae', 'ska', 'dub'],
+    searchTerms: ['reggae music', 'ska music', 'dub music', 'caribbean music'],
+    audioFeatures: {
+      min_danceability: 0.6,
+      max_energy: 0.7,
+      min_valence: 0.5,
+      min_tempo: 60,
+      max_tempo: 120
+    }
+  },
   
-  country: [
-    'country', 'folk', 'americana', 'bluegrass', 'alt-country', 'outlaw-country',
-    'country-rock', 'honky-tonk', 'western', 'country-pop', 'contemporary-country',
-    'cajun', 'zydeco', 'appalachian', 'old-time', 'cowboy-western'
-  ],
+  country: {
+    seeds: ['country', 'folk', 'americana', 'bluegrass'],
+    searchTerms: ['country music', 'folk music', 'americana', 'country folk'],
+    audioFeatures: {
+      min_acousticness: 0.4,
+      max_danceability: 0.7,
+      min_valence: 0.4,
+      min_tempo: 80,
+      max_tempo: 140
+    }
+  },
   
-  latin: [
-    'latin', 'salsa', 'bachata', 'merengue', 'cumbia', 'reggaeton', 'tango',
-    'bossa-nova', 'samba', 'forro', 'mpb', 'bolero', 'mambo', 'cha-cha',
-    'son', 'rumba', 'flamenco', 'mariachi', 'ranchera', 'banda', 'vallenato',
-    'tropicalia', 'nueva-cancion'
-  ],
+  latin: {
+    seeds: ['latin', 'salsa', 'reggaeton'],
+    searchTerms: ['latin music', 'salsa music', 'reggaeton', 'latin pop'],
+    audioFeatures: {
+      min_danceability: 0.7,
+      min_energy: 0.6,
+      min_valence: 0.5,
+      min_tempo: 90,
+      max_tempo: 150
+    }
+  },
   
-  ambient: [
-    'ambient', 'chill', 'new-age', 'meditation', 'drone', 'dark-ambient',
-    'space-ambient', 'psybient', 'chillout', 'lounge', 'downtempo', 'trip-hop',
-    'nu-jazz', 'acid-jazz', 'liquid-funk', 'atmospheric', 'cinematic',
-    'post-ambient', 'field-recording'
-  ]
+  ambient: {
+    seeds: ['ambient', 'chill', 'new-age'],
+    searchTerms: ['ambient music', 'chill music', 'atmospheric music', 'meditation music'],
+    audioFeatures: {
+      max_energy: 0.4,
+      min_instrumentalness: 0.3,
+      max_danceability: 0.4,
+      max_loudness: -15,
+      min_tempo: 60,
+      max_tempo: 100
+    }
+  }
 };
 
 const getAudioFeatures = (answers) => {
@@ -125,9 +196,65 @@ const getAudioFeatures = (answers) => {
   };
 };
 
+const buildRecommendationParams = (genreProfile, moodFeatures) => {
+  const params = {
+    seed_genres: genreProfile.seeds.slice(0, 2).join(','),
+    limit: 30
+  };
+  
+  // Combina audio features del genere con quelle del mood
+  const combinedFeatures = { ...genreProfile.audioFeatures };
+  
+  // Applica mood adjustments mantenendo i vincoli del genere
+  if (moodFeatures.valence) {
+    if (!combinedFeatures.min_valence && !combinedFeatures.max_valence) {
+      const valenceRange = 0.2;
+      combinedFeatures.min_valence = Math.max(0, parseFloat(moodFeatures.valence) - valenceRange);
+      combinedFeatures.max_valence = Math.min(1, parseFloat(moodFeatures.valence) + valenceRange);
+    }
+  }
+  
+  if (moodFeatures.energy) {
+    const energyValue = parseFloat(moodFeatures.energy);
+    if (combinedFeatures.min_energy) {
+      combinedFeatures.min_energy = Math.max(combinedFeatures.min_energy, energyValue - 0.2);
+    }
+    if (combinedFeatures.max_energy) {
+      combinedFeatures.max_energy = Math.min(combinedFeatures.max_energy, energyValue + 0.2);
+    }
+    if (!combinedFeatures.min_energy && !combinedFeatures.max_energy) {
+      combinedFeatures.min_energy = Math.max(0, energyValue - 0.2);
+      combinedFeatures.max_energy = Math.min(1, energyValue + 0.2);
+    }
+  }
+  
+  if (moodFeatures.danceability) {
+    const danceValue = parseFloat(moodFeatures.danceability);
+    if (combinedFeatures.min_danceability) {
+      combinedFeatures.min_danceability = Math.max(combinedFeatures.min_danceability, danceValue - 0.2);
+    }
+    if (combinedFeatures.max_danceability) {
+      combinedFeatures.max_danceability = Math.min(combinedFeatures.max_danceability, danceValue + 0.2);
+    }
+    if (!combinedFeatures.min_danceability && !combinedFeatures.max_danceability) {
+      combinedFeatures.min_danceability = Math.max(0, danceValue - 0.2);
+      combinedFeatures.max_danceability = Math.min(1, danceValue + 0.2);
+    }
+  }
+  
+  // Aggiungi tempo se specificato nel mood
+  if (moodFeatures.tempo && !combinedFeatures.min_tempo && !combinedFeatures.max_tempo) {
+    const tempoValue = parseInt(moodFeatures.tempo);
+    combinedFeatures.min_tempo = Math.max(60, tempoValue - 20);
+    combinedFeatures.max_tempo = Math.min(200, tempoValue + 20);
+  }
+  
+  return { ...params, ...combinedFeatures };
+};
+
 exports.handler = async (event, context) => {
   try {
-    console.log('🎵 === SPOTIFY FUNCTION START ===');
+    console.log('🎵 === SPOTIFY FUNCTION START (ENHANCED) ===');
     console.log('📥 Parametri ricevuti:', event.queryStringParameters);
     
     const answers = event.queryStringParameters || {};
@@ -151,29 +278,24 @@ exports.handler = async (event, context) => {
     const token = tokenData.access_token;
     console.log('✅ Token Spotify ottenuto');
     
-    // Calcola audio features e genere
-    const audioFeatures = getAudioFeatures(answers);
+    // Calcola audio features del mood
+    const moodFeatures = getAudioFeatures(answers);
     const selectedGenre = answers.genre || 'pop';
-    const validGenres = spotifyValidGenres[selectedGenre] || ['pop'];
+    const genreProfile = genreProfiles[selectedGenre] || genreProfiles['pop'];
     
     console.log(`🎯 Genere selezionato: "${selectedGenre}"`);
-    console.log(`🎼 Generi Spotify validi: [${validGenres.join(', ')}]`);
-    console.log(`🎵 Audio features calcolate:`, audioFeatures);
+    console.log(`🎼 Seeds disponibili: [${genreProfile.seeds.join(', ')}]`);
+    console.log(`🎵 Audio features mood:`, moodFeatures);
+    console.log(`🎸 Audio features genere:`, genreProfile.audioFeatures);
     
     let tracks = [];
     
-    // STRATEGIA 1: Recommendations API con genere specifico
+    // STRATEGIA 1: Recommendations API con profilo genere + mood
     try {
-      console.log('📡 Tentativo 1: Recommendations API...');
+      console.log('📡 Tentativo 1: Recommendations API Enhanced...');
       
-      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams({
-        seed_genres: validGenres.slice(0, 2).join(','), // Max 2 seed genres
-        limit: 30,
-        target_valence: audioFeatures.valence,
-        target_energy: audioFeatures.energy,
-        target_danceability: audioFeatures.danceability,
-        min_popularity: 20
-      })}`;
+      const recParams = buildRecommendationParams(genreProfile, moodFeatures);
+      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(recParams)}`;
       
       console.log('🔗 URL Recommendations:', recommendationsUrl);
       
@@ -194,44 +316,38 @@ exports.handler = async (event, context) => {
             url: track.external_urls.spotify,
             image: track.album.images[1]?.url || track.album.images[0]?.url,
             popularity: track.popularity,
+            preview_url: track.preview_url,
             id: track.id,
-            source: 'recommendations'
+            source: 'recommendations-enhanced'
           }));
-          console.log(`✅ SUCCESSO con Recommendations API: ${tracks.length} canzoni`);
+          console.log(`✅ SUCCESSO con Recommendations Enhanced: ${tracks.length} canzoni`);
         }
       } else {
         const errorText = await recResponse.text();
         console.log(`❌ Recommendations error: ${recResponse.status} - ${errorText}`);
       }
     } catch (error) {
-      console.log('❌ Recommendations error:', error.message);
+      console.log('❌ Recommendations Enhanced error:', error.message);
     }
     
-    // STRATEGIA 2: Search API con genere specifico
+    // STRATEGIA 2: Search API con termini specifici del genere
     if (tracks.length === 0) {
-      console.log('📡 Tentativo 2: Search API con genere...');
+      console.log('📡 Tentativo 2: Search API con termini specifici...');
       
-      const searchQueries = [
-        `genre:"${selectedGenre}"`,
-        `genre:"${validGenres[0]}"`,
-        `"${selectedGenre}"`,
-        `"${validGenres[0]}"`
-      ];
-      
-      for (const query of searchQueries) {
+      for (const searchTerm of genreProfile.searchTerms) {
         try {
-          console.log(`🔍 Cercando: "${query}"`);
+          console.log(`🔍 Cercando: "${searchTerm}"`);
           
-          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=30`;
+          const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=30`;
           const searchResponse = await fetch(searchUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
-          console.log(`📊 Search "${query}" status: ${searchResponse.status}`);
+          console.log(`📊 Search "${searchTerm}" status: ${searchResponse.status}`);
           
           if (searchResponse.ok) {
             const searchData = await searchResponse.json();
-            console.log(`🎵 Search "${query}" trovate: ${searchData.tracks.items?.length || 0}`);
+            console.log(`🎵 Search "${searchTerm}" trovate: ${searchData.tracks.items?.length || 0}`);
             
             if (searchData.tracks.items.length > 0) {
               tracks = searchData.tracks.items.map(track => ({
@@ -240,27 +356,61 @@ exports.handler = async (event, context) => {
                 url: track.external_urls.spotify,
                 image: track.album.images[1]?.url || track.album.images[0]?.url,
                 popularity: track.popularity,
+                preview_url: track.preview_url,
                 id: track.id,
-                source: `search-${query}`
+                source: `search-${searchTerm}`
               }));
-              console.log(`✅ SUCCESSO con Search "${query}": ${tracks.length} canzoni`);
+              console.log(`✅ SUCCESSO con Search "${searchTerm}": ${tracks.length} canzoni`);
               break;
             }
           } else {
-            console.log(`❌ Search "${query}" failed: ${searchResponse.status}`);
+            console.log(`❌ Search "${searchTerm}" failed: ${searchResponse.status}`);
           }
         } catch (error) {
-          console.log(`❌ Search "${query}" error:`, error.message);
+          console.log(`❌ Search "${searchTerm}" error:`, error.message);
           continue;
         }
       }
     }
     
-    // STRATEGIA 3: Fallback generico
+    // STRATEGIA 3: Recommendations API base (fallback)
     if (tracks.length === 0) {
-      console.log('📡 Tentativo 3: Search generico...');
+      console.log('📡 Tentativo 3: Recommendations API base...');
       
-      const fallbackQuery = 'popular music';
+      const basicParams = {
+        seed_genres: genreProfile.seeds.slice(0, 2).join(','),
+        limit: 30,
+        min_popularity: 20
+      };
+      
+      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(basicParams)}`;
+      const recResponse = await fetch(recommendationsUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (recResponse.ok) {
+        const recData = await recResponse.json();
+        if (recData.tracks && recData.tracks.length > 0) {
+          tracks = recData.tracks.map(track => ({
+            name: track.name,
+            artist: track.artists[0].name,
+            url: track.external_urls.spotify,
+            image: track.album.images[1]?.url || track.album.images[0]?.url,
+            popularity: track.popularity,
+            preview_url: track.preview_url,
+            id: track.id,
+            source: 'recommendations-basic'
+          }));
+          console.log(`✅ Fallback Recommendations: ${tracks.length} canzoni`);
+        }
+      }
+    }
+    
+    // STRATEGIA 4: Search generico (ultimo fallback)
+    if (tracks.length === 0) {
+      console.log('📡 Tentativo 4: Search generico...');
+      
+      const fallbackQuery = `${selectedGenre} music`;
       const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=20`;
       const searchResponse = await fetch(searchUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -274,28 +424,49 @@ exports.handler = async (event, context) => {
           url: track.external_urls.spotify,
           image: track.album.images[1]?.url || track.album.images[0]?.url,
           popularity: track.popularity,
+          preview_url: track.preview_url,
           id: track.id,
-          source: 'fallback'
+          source: 'search-generic'
         }));
-        console.log(`✅ Fallback: ${tracks.length} canzoni generiche`);
+        console.log(`✅ Search generico: ${tracks.length} canzoni`);
       }
     }
     
-    // Rimuovi duplicati
+    // Rimuovi duplicati e filtra per qualità
     const uniqueTracks = [];
     const seen = new Set();
     
     for (const track of tracks) {
       const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
-      if (!seen.has(key)) {
+      if (!seen.has(key) && track.popularity >= 10) { // Minima qualità
         seen.add(key);
         uniqueTracks.push(track);
       }
     }
     
-    console.log(`🎵 === RISULTATO FINALE ===`);
+    // Ordina per popolarità e rilevanza
+    uniqueTracks.sort((a, b) => {
+      // Priorità per source (recommendations > search)
+      const sourceWeight = {
+        'recommendations-enhanced': 100,
+        'recommendations-basic': 80,
+        'search-specific': 60,
+        'search-generic': 40
+      };
+      
+      const aWeight = sourceWeight[a.source] || 0;
+      const bWeight = sourceWeight[b.source] || 0;
+      
+      if (aWeight !== bWeight) return bWeight - aWeight;
+      
+      // Poi per popolarità
+      return (b.popularity || 0) - (a.popularity || 0);
+    });
+    
+    console.log(`🎵 === RISULTATO FINALE ENHANCED ===`);
     console.log(`📊 Canzoni uniche trovate: ${uniqueTracks.length}`);
     console.log(`🎯 Genere richiesto: ${selectedGenre}`);
+    console.log(`🎸 Profilo genere usato:`, genreProfile.audioFeatures);
     console.log(`🔗 Prima canzone: ${uniqueTracks[0]?.name} - ${uniqueTracks[0]?.artist} (source: ${uniqueTracks[0]?.source})`);
     
     return {
@@ -306,16 +477,18 @@ exports.handler = async (event, context) => {
       },
       body: JSON.stringify({ 
         tracks: uniqueTracks,
-        audioFeatures: audioFeatures,
+        audioFeatures: moodFeatures,
+        genreProfile: genreProfile.audioFeatures,
         requestedGenre: selectedGenre,
-        usedGenres: validGenres,
-        message: `Found ${uniqueTracks.length} tracks`,
+        usedSeeds: genreProfile.seeds,
+        searchTerms: genreProfile.searchTerms,
+        message: `Found ${uniqueTracks.length} tracks with enhanced genre precision`,
         success: true
       })
     };
     
   } catch (error) {
-    console.error('💥 === ERRORE FINALE ===');
+    console.error('💥 === ERRORE FINALE ENHANCED ===');
     console.error('❌ Error:', error.message);
     
     return {
