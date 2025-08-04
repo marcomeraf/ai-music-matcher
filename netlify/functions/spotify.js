@@ -3,7 +3,7 @@ const fetch = require('node-fetch');
 const SPOTIFY_CLIENT_ID = '6a5d13df3d304b8cb3413b54f1d151c9';
 const SPOTIFY_CLIENT_SECRET = '7ec729a1b84244398b228f38077bbe71';
 
-// Generi VALIDI per Spotify Recommendations API (verificati!)
+// Generi VALIDI per Spotify Recommendations API
 const spotifyValidGenres = {
   electronic: ['house', 'techno', 'electronic'],
   pop: ['pop', 'dance-pop'],
@@ -24,26 +24,88 @@ const getAudioFeatures = (answers) => {
   
   // Mood mapping
   switch (answers.mood) {
-    case 'happy': valence = 0.8; energy = 0.7; danceability = 0.8; tempo = 128; break;
-    case 'calm': valence = 0.6; energy = 0.3; danceability = 0.4; tempo = 80; break;
-    case 'melancholic': valence = 0.2; energy = 0.4; danceability = 0.3; tempo = 85; break;
-    case 'motivated': valence = 0.7; energy = 0.9; danceability = 0.6; tempo = 140; break;
-    case 'nostalgic': valence = 0.5; energy = 0.5; danceability = 0.5; tempo = 110; break;
+    case 'happy':
+      valence = 0.8; energy = 0.7; danceability = 0.8; tempo = 128;
+      break;
+    case 'calm':
+      valence = 0.6; energy = 0.3; danceability = 0.4; tempo = 80;
+      break;
+    case 'melancholic':
+      valence = 0.2; energy = 0.4; danceability = 0.3; tempo = 85;
+      break;
+    case 'motivated':
+      valence = 0.7; energy = 0.9; danceability = 0.6; tempo = 140;
+      break;
+    case 'nostalgic':
+      valence = 0.5; energy = 0.5; danceability = 0.5; tempo = 110;
+      break;
+    default:
+      break;
   }
   
   // Activity adjustments
   switch (answers.activity) {
-    case 'exercising': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 130); break;
-    case 'relaxing': energy = Math.max(0.1, energy - 0.4); tempo = Math.min(tempo, 90); break;
-    case 'partying': energy = Math.min(1.0, energy + 0.2); danceability = Math.min(1.0, danceability + 0.3); break;
-    case 'working': energy = Math.max(0.3, Math.min(0.7, energy)); danceability = Math.max(0.2, danceability - 0.2); break;
+    case 'exercising':
+      energy = Math.min(1.0, energy + 0.3);
+      tempo = Math.max(tempo, 130);
+      break;
+    case 'relaxing':
+      energy = Math.max(0.1, energy - 0.4);
+      tempo = Math.min(tempo, 90);
+      break;
+    case 'partying':
+      energy = Math.min(1.0, energy + 0.2);
+      danceability = Math.min(1.0, danceability + 0.3);
+      break;
+    case 'working':
+      energy = Math.max(0.3, Math.min(0.7, energy));
+      danceability = Math.max(0.2, danceability - 0.2);
+      break;
+    default:
+      break;
   }
   
   // Energy level adjustments
   switch (answers.energy) {
-    case 'high': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 125); break;
-    case 'low': energy = Math.max(0.1, energy - 0.3); tempo = Math.min(tempo, 95); break;
-    case 'medium': energy = Math.max(0.4, Math.min(0.7, energy)); break;
+    case 'high':
+      energy = Math.min(1.0, energy + 0.3);
+      tempo = Math.max(tempo, 125);
+      break;
+    case 'low':
+      energy = Math.max(0.1, energy - 0.3);
+      tempo = Math.min(tempo, 95);
+      break;
+    case 'medium':
+      energy = Math.max(0.4, Math.min(0.7, energy));
+      break;
+    default:
+      break;
+  }
+  
+  // Time of day adjustments
+  switch (answers.time) {
+    case 'morning':
+      valence = Math.min(1.0, valence + 0.1);
+      energy = Math.min(1.0, energy + 0.1);
+      tempo = Math.max(tempo, 100);
+      break;
+    case 'afternoon':
+      valence = Math.min(1.0, valence + 0.05);
+      energy = Math.min(1.0, energy + 0.05);
+      tempo = Math.max(tempo, 110);
+      break;
+    case 'evening':
+      valence = Math.min(1.0, valence + 0.2);
+      energy = Math.min(1.0, energy + 0.2);
+      danceability = Math.min(1.0, danceability + 0.1);
+      tempo = Math.max(tempo, 115);
+      break;
+    case 'night':
+      energy = Math.min(1.0, energy + 0.3);
+      tempo = Math.max(tempo, 120);
+      break;
+    default:
+      break;
   }
   
   return {
@@ -60,6 +122,7 @@ exports.handler = async (event, context) => {
     console.log('📥 Parametri ricevuti:', event.queryStringParameters);
     
     const answers = event.queryStringParameters || {};
+    const selectedTime = answers.time || null;
     
     // Ottieni token Spotify
     console.log('🔑 Richiedendo token Spotify...');
@@ -67,7 +130,9 @@ exports.handler = async (event, context) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+        'Authorization': 'Basic ' + Buffer.from(
+          SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET
+        ).toString('base64')
       },
       body: 'grant_type=client_credentials'
     });
@@ -76,8 +141,7 @@ exports.handler = async (event, context) => {
       throw new Error(`Token request failed: ${tokenResponse.status}`);
     }
     
-    const tokenData = await tokenResponse.json();
-    const token = tokenData.access_token;
+    const { access_token: token } = await tokenResponse.json();
     console.log('✅ Token Spotify ottenuto');
     
     // Calcola audio features e genere
@@ -87,6 +151,7 @@ exports.handler = async (event, context) => {
     
     console.log(`🎯 Genere selezionato: "${selectedGenre}"`);
     console.log(`🎼 Generi Spotify validi: [${validGenres.join(', ')}]`);
+    console.log(`⏰ Time of day selezionato: "${selectedTime}"`);
     console.log(`🎵 Audio features calcolate:`, audioFeatures);
     
     let tracks = [];
@@ -96,11 +161,12 @@ exports.handler = async (event, context) => {
       console.log('📡 Tentativo 1: Recommendations API...');
       
       const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams({
-        seed_genres: validGenres.slice(0, 2).join(','), // Max 2 seed genres
+        seed_genres: validGenres.slice(0, 3).join(','), // fino a 3 seed genres
         limit: 30,
         target_valence: audioFeatures.valence,
         target_energy: audioFeatures.energy,
         target_danceability: audioFeatures.danceability,
+        target_tempo: audioFeatures.tempo,
         min_popularity: 20
       })}`;
       
@@ -178,9 +244,8 @@ exports.handler = async (event, context) => {
           } else {
             console.log(`❌ Search "${query}" failed: ${searchResponse.status}`);
           }
-        } catch (error) {
-          console.log(`❌ Search "${query}" error:`, error.message);
-          continue;
+        } catch (err) {
+          console.log(`❌ Search "${query}" error:`, err.message);
         }
       }
     }
@@ -213,7 +278,6 @@ exports.handler = async (event, context) => {
     // Rimuovi duplicati
     const uniqueTracks = [];
     const seen = new Set();
-    
     for (const track of tracks) {
       const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
       if (!seen.has(key)) {
@@ -222,9 +286,10 @@ exports.handler = async (event, context) => {
       }
     }
     
-    console.log(`🎵 === RISULTATO FINALE ===`);
+    console.log('🎵 === RISULTATO FINALE ===');
     console.log(`📊 Canzoni uniche trovate: ${uniqueTracks.length}`);
     console.log(`🎯 Genere richiesto: ${selectedGenre}`);
+    console.log(`⏰ Time richiesto: ${selectedTime}`);
     console.log(`🔗 Prima canzone: ${uniqueTracks[0]?.name} - ${uniqueTracks[0]?.artist} (source: ${uniqueTracks[0]?.source})`);
     
     return {
@@ -235,8 +300,9 @@ exports.handler = async (event, context) => {
       },
       body: JSON.stringify({ 
         tracks: uniqueTracks,
-        audioFeatures: audioFeatures,
+        audioFeatures,
         requestedGenre: selectedGenre,
+        requestedTime: selectedTime,
         usedGenres: validGenres,
         message: `Found ${uniqueTracks.length} tracks`,
         success: true
@@ -244,9 +310,7 @@ exports.handler = async (event, context) => {
     };
     
   } catch (error) {
-    console.error('💥 === ERRORE FINALE ===');
-    console.error('❌ Error:', error.message);
-    
+    console.error('💥 === ERRORE FINALE ===', error);
     return {
       statusCode: 500,
       headers: { 'Access-Control-Allow-Origin': '*' },
