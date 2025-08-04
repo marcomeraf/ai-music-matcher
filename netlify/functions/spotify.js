@@ -9,8 +9,7 @@ const spotifyValidGenres = {
     'house', 'techno', 'electronic', 'edm', 'trance', 'dubstep', 'drum-and-bass',
     'electro', 'progressive-house', 'deep-house', 'tech-house', 'minimal-techno',
     'breakbeat', 'garage', 'uk-garage', 'future-bass', 'hardstyle', 'psytrance',
-    'downtempo', 'trip-hop', 'idm', 'synthwave', 'chillwave', 'electronica',
-    'glitch', 'ambient', 'dub-techno', 'acid-house', 'detroit-techno'
+    'downtempo', 'trip-hop', 'idm', 'synthwave', 'chillwave', 'electronica'
   ],
   
   pop: [
@@ -88,34 +87,6 @@ const spotifyValidGenres = {
     'space-ambient', 'psybient', 'chillout', 'lounge', 'downtempo', 'trip-hop',
     'nu-jazz', 'acid-jazz', 'liquid-funk', 'atmospheric', 'cinematic',
     'post-ambient', 'field-recording'
-  ],
-  
-  funk: [
-    'funk', 'p-funk', 'funk-rock', 'funk-metal', 'afrobeat', 'g-funk',
-    'funk-carioca', 'boogie', 'disco-funk', 'go-go', 'minneapolis-funk'
-  ],
-  
-  soul: [
-    'soul', 'r-n-b', 'neo-soul', 'northern-soul', 'southern-soul', 'deep-soul',
-    'blue-eyed-soul', 'psychedelic-soul', 'funk-soul', 'contemporary-r-n-b',
-    'alternative-r-n-b', 'motown'
-  ],
-  
-  disco: [
-    'disco', 'nu-disco', 'italo-disco', 'euro-disco', 'space-disco', 'cosmic-disco',
-    'disco-house', 'disco-funk', 'disco-pop', 'boogie', 'french-disco'
-  ],
-  
-  world: [
-    'world-music', 'african', 'indian', 'middle-eastern', 'celtic', 'balkan',
-    'klezmer', 'gamelan', 'qawwali', 'fado', 'chanson', 'highlife', 'soukous',
-    'mbalax', 'rai', 'turkish', 'arabic'
-  ],
-  
-  experimental: [
-    'experimental', 'avant-garde', 'noise', 'industrial', 'post-industrial',
-    'power-electronics', 'harsh-noise', 'musique-concrete', 'electroacoustic',
-    'sound-art', 'field-recording', 'lowercase'
   ]
 };
 
@@ -242,9 +213,9 @@ exports.handler = async (event, context) => {
       
       const searchQueries = [
         `genre:"${selectedGenre}"`,
-       `genre:"${validGenres[0]}"`,
-        selectedGenre,
-       `"${validGenres[0]}"`
+        `genre:"${validGenres[0]}"`,
+        `"${selectedGenre}"`,
+        `"${validGenres[0]}"`
       ];
       
       for (const query of searchQueries) {
