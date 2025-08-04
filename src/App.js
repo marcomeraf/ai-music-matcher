@@ -10,11 +10,6 @@ const MusicMoodMatcher = () => {
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  // Spotify API credentials
-  const SPOTIFY_CLIENT_ID = '6a5d13df3d304b8cb3413b54f1d151c9';
-  const SPOTIFY_CLIENT_SECRET = '7ec729a1b84244398b228f38077bbe71';
-  const SPOTIFY_BASE_URL = 'https://api.spotify.com/v1';
-
   const questions = [
     {
       id: 'mood',
@@ -140,16 +135,14 @@ const MusicMoodMatcher = () => {
       }
     });
 
-    // Rimuovi duplicati e prendi i più rilevanti
     return [...new Set(allTags)].slice(0, 5);
   };
 
-  // Chiamata alla Netlify Function invece delle API dirette
+  // Chiamata alla Netlify Function
   const searchSpotify = async (tags) => {
     try {
       console.log(`🎵 Chiamando Netlify Function con mood: ${answers.mood}, genre: ${answers.genre}`);
       
-      // Costruisci i parametri per la function
       const params = new URLSearchParams({
         mood: answers.mood || 'happy',
         activity: answers.activity || 'relaxing',
@@ -159,7 +152,6 @@ const MusicMoodMatcher = () => {
         tags: tags.join(',')
       });
       
-      // Chiama la Netlify Function
       const response = await fetch(`/api/spotify?${params}`);
       
       if (!response.ok) {
@@ -181,13 +173,12 @@ const MusicMoodMatcher = () => {
     } catch (error) {
       console.error('Errore nella Netlify Function:', error);
       
-      // Fallback locale minimo (solo per test)
       console.log('🔄 Usando fallback locale...');
       return getFallbackTracks();
     }
   };
 
-  // Fallback minimo per test
+  // Fallback locale
   const getFallbackTracks = () => {
     const tracks = [
       { name: "Blinding Lights", artist: "The Weeknd", url: "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b", popularity: 95 },
@@ -203,82 +194,29 @@ const MusicMoodMatcher = () => {
     })).sort((a, b) => b.score - a.score);
   };
 
-  // Converti mood in audio features per Spotify
+  // Audio features
   const getAudioFeaturesFromMood = (answers) => {
-    let valence = 0.5; // Positività (0=sad, 1=happy)
-    let energy = 0.5;  // Energia (0=calm, 1=energetic)  
-    let danceability = 0.5; // Ballabilità
-    let tempo = 120; // BPM
+    let valence = 0.5, energy = 0.5, danceability = 0.5, tempo = 120;
     
-    // Mood mapping
     switch (answers.mood) {
-      case 'happy':
-        valence = 0.8;
-        energy = 0.7;
-        danceability = 0.8;
-        tempo = 128;
-        break;
-      case 'calm':
-        valence = 0.6;
-        energy = 0.3;
-        danceability = 0.4;
-        tempo = 80;
-        break;
-      case 'melancholic':
-        valence = 0.2;
-        energy = 0.4;
-        danceability = 0.3;
-        tempo = 85;
-        break;
-      case 'motivated':
-        valence = 0.7;
-        energy = 0.9;
-        danceability = 0.6;
-        tempo = 140;
-        break;
-      case 'nostalgic':
-        valence = 0.5;
-        energy = 0.5;
-        danceability = 0.5;
-        tempo = 110;
-        break;
+      case 'happy': valence = 0.8; energy = 0.7; danceability = 0.8; tempo = 128; break;
+      case 'calm': valence = 0.6; energy = 0.3; danceability = 0.4; tempo = 80; break;
+      case 'melancholic': valence = 0.2; energy = 0.4; danceability = 0.3; tempo = 85; break;
+      case 'motivated': valence = 0.7; energy = 0.9; danceability = 0.6; tempo = 140; break;
+      case 'nostalgic': valence = 0.5; energy = 0.5; danceability = 0.5; tempo = 110; break;
     }
     
-    // Activity adjustments
     switch (answers.activity) {
-      case 'exercising':
-        energy = Math.min(1.0, energy + 0.3);
-        tempo = Math.max(tempo, 130);
-        danceability = Math.min(1.0, danceability + 0.2);
-        break;
-      case 'relaxing':
-        energy = Math.max(0.1, energy - 0.4);
-        tempo = Math.min(tempo, 90);
-        break;
-      case 'partying':
-        energy = Math.min(1.0, energy + 0.2);
-        danceability = Math.min(1.0, danceability + 0.3);
-        tempo = Math.max(tempo, 120);
-        break;
-      case 'working':
-        energy = Math.max(0.3, Math.min(0.7, energy));
-        danceability = Math.max(0.2, danceability - 0.2);
-        break;
+      case 'exercising': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 130); break;
+      case 'relaxing': energy = Math.max(0.1, energy - 0.4); tempo = Math.min(tempo, 90); break;
+      case 'partying': energy = Math.min(1.0, energy + 0.2); danceability = Math.min(1.0, danceability + 0.3); break;
+      case 'working': energy = Math.max(0.3, Math.min(0.7, energy)); danceability = Math.max(0.2, danceability - 0.2); break;
     }
     
-    // Energy level adjustments
     switch (answers.energy) {
-      case 'high':
-        energy = Math.min(1.0, energy + 0.3);
-        tempo = Math.max(tempo, 125);
-        break;
-      case 'low':
-        energy = Math.max(0.1, energy - 0.3);
-        tempo = Math.min(tempo, 95);
-        break;
-      case 'medium':
-        energy = Math.max(0.4, Math.min(0.7, energy));
-        break;
+      case 'high': energy = Math.min(1.0, energy + 0.3); tempo = Math.max(tempo, 125); break;
+      case 'low': energy = Math.max(0.1, energy - 0.3); tempo = Math.min(tempo, 95); break;
+      case 'medium': energy = Math.max(0.4, Math.min(0.7, energy)); break;
     }
     
     return {
@@ -292,7 +230,6 @@ const MusicMoodMatcher = () => {
   const generateExplanation = (track, answers, tags) => {
     const explanations = [];
     
-    // Spiegazione basata sul mood
     if (answers.mood === 'happy') {
       explanations.push("Ho scelto questa canzone perché emana energia positiva");
     } else if (answers.mood === 'calm') {
@@ -305,7 +242,6 @@ const MusicMoodMatcher = () => {
       explanations.push("Questa canzone evoca dolci ricordi");
     }
 
-    // Spiegazione basata sull'attività
     if (answers.activity === 'working') {
       explanations.push("ideale per mantenere la concentrazione");
     } else if (answers.activity === 'exercising') {
@@ -326,18 +262,15 @@ const MusicMoodMatcher = () => {
         throw new Error('Nessuna canzone trovata');
       }
 
-      // Selezione intelligente con varietà
       const totalTracks = tracks.length;
       let selectedTrack;
       
       if (totalTracks === 1) {
         selectedTrack = tracks[0];
       } else if (totalTracks <= 5) {
-        // Scegli random tra i primi 5
         const randomIndex = Math.floor(Math.random() * totalTracks);
         selectedTrack = tracks[randomIndex];
       } else {
-        // Selezione pesata tra i primi 15
         const topTracks = tracks.slice(0, 15);
         const weights = topTracks.map((_, index) => Math.pow(0.85, index));
         const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
@@ -357,15 +290,11 @@ const MusicMoodMatcher = () => {
       }
       
       const explanation = generateExplanation(selectedTrack, answers, tags);
-      
-      // Calcola confidence basata sui parametri audio e popolarità
       const audioFeatures = getAudioFeaturesFromMood(answers);
       const popularityScore = selectedTrack.popularity || 50;
       const confidence = Math.min(95, 70 + Math.floor(popularityScore / 5) + Math.floor(Math.random() * 15));
 
       console.log(`🎯 Canzone Spotify selezionata: "${selectedTrack.name}" di ${selectedTrack.artist}`);
-      console.log(`📊 Popularity: ${popularityScore}, Confidence: ${confidence}%`);
-      console.log(`🎵 Audio features target:`, audioFeatures);
 
       return {
         ...selectedTrack,
@@ -387,7 +316,6 @@ const MusicMoodMatcher = () => {
     if (currentStep < questions.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Analisi finale
       setIsAnalyzing(true);
       setError(null);
       
@@ -419,7 +347,7 @@ const MusicMoodMatcher = () => {
         setError('Qualcosa è andato storto. Riprova!');
         setIsAnalyzing(false);
       }
-    }, 1500); // Più veloce del primo caricamento
+    }, 1500);
   };
 
   const resetQuiz = () => {
@@ -436,14 +364,12 @@ const MusicMoodMatcher = () => {
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      {/* Apple-style background */}
       <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,_rgba(0,0,0,0.02),_transparent_50%)]"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,_rgba(0,0,0,0.02),_transparent_50%)]"></div>
       </div>
 
       <div className="relative z-10 container mx-auto px-6 py-12 max-w-4xl">
-        {/* Apple-style Header */}
         <div className="text-center mb-16">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-black mb-6 shadow-xl">
             <Music className="w-10 h-10 text-white" />
@@ -461,7 +387,6 @@ const MusicMoodMatcher = () => {
 
         {!showResult && !isAnalyzing && !error && (
           <div className="max-w-2xl mx-auto">
-            {/* Apple-style Progress */}
             <div className="mb-12">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm font-medium text-gray-900">
@@ -479,7 +404,6 @@ const MusicMoodMatcher = () => {
               </div>
             </div>
 
-            {/* Apple-style Question Card */}
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 mb-8">
               <div className="text-center mb-10">
                 <div className="text-7xl mb-6">{currentQuestion.emoji}</div>
@@ -520,21 +444,17 @@ const MusicMoodMatcher = () => {
         {isAnalyzing && (
           <div className="max-w-lg mx-auto text-center">
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12">
-              {/* Animazione figa con onde sonore */}
               <div className="relative w-24 h-24 mx-auto mb-8">
-                {/* Cerchi concentrici animati */}
                 <div className="absolute inset-0 border-4 border-black rounded-full animate-ping opacity-20"></div>
                 <div className="absolute inset-2 border-4 border-gray-600 rounded-full animate-ping opacity-40" style={{animationDelay: '0.2s'}}></div>
                 <div className="absolute inset-4 border-4 border-gray-400 rounded-full animate-ping opacity-60" style={{animationDelay: '0.4s'}}></div>
                 
-                {/* Icona centrale */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
                     <Music className="w-6 h-6 text-white animate-pulse" />
                   </div>
                 </div>
                 
-                {/* Onde sonore laterali */}
                 <div className="absolute -left-8 top-1/2 transform -translate-y-1/2">
                   <div className="flex gap-1">
                     {[...Array(4)].map((_, i) => (
@@ -612,7 +532,6 @@ const MusicMoodMatcher = () => {
         {showResult && recommendation && (
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              {/* Header della canzone */}
               <div className="p-8 pb-6">
                 <div className="text-center mb-8">
                   <div className="w-16 h-16 rounded-full bg-black flex items-center justify-center mx-auto mb-6">
@@ -626,7 +545,6 @@ const MusicMoodMatcher = () => {
                   </div>
                 </div>
 
-                {/* Card della canzone */}
                 <div className="bg-gray-50 rounded-2xl p-6 mb-6">
                   <div className="flex items-center gap-6 mb-6">
                     {recommendation.image ? (
@@ -657,7 +575,6 @@ const MusicMoodMatcher = () => {
                     </div>
                   </div>
 
-                  {/* Spiegazione */}
                   <div className="bg-white rounded-xl p-4 mb-6">
                     <p className="text-gray-700 font-light leading-relaxed">
                       {recommendation.reason}
@@ -677,33 +594,34 @@ const MusicMoodMatcher = () => {
                     )}
                   </div>
 
-{/* Bottoni azione */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-  
-    href={recommendation.url}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
-  >
-    <Play className="w-5 h-5" />
-    Apri su Spotify
-  </a>
-  {recommendation.preview_url ? (
-    <audio
-      controls
-      src={recommendation.preview_url}
-      className="w-full h-12 rounded-xl"
-    >
-      Il tuo browser non supporta l'audio.
-    </audio>
-  ) : (
-    <div className="flex items-center justify-center px-6 py-4 bg-gray-100 text-gray-500 rounded-xl">
-      <span className="text-sm">Preview non disponibile</span>
-    </div>
-  )}
-</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <a
+                      href={recommendation.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
+                    >
+                      <Play className="w-5 h-5" />
+                      Apri su Spotify
+                    </a>
+                    {recommendation.preview_url ? (
+                      <audio
+                        controls
+                        src={recommendation.preview_url}
+                        className="w-full h-12 rounded-xl"
+                        style={{ filter: 'sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%)' }}
+                      >
+                        Il tuo browser non supporta l'audio.
+                      </audio>
+                    ) : (
+                      <div className="flex items-center justify-center px-6 py-4 bg-gray-100 text-gray-500 rounded-xl">
+                        <span className="text-sm">Preview non disponibile</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-              {/* Footer con Quick Retry */}
               <div className="px-8 pb-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <button
