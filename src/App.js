@@ -267,29 +267,9 @@ const MusicMoodMatcher = () => {
       const totalTracks = tracks.length;
       let selectedTrack;
       
-      if (totalTracks === 1) {
-        selectedTrack = tracks[0];
-      } else if (totalTracks <= 5) {
-        const randomIndex = Math.floor(Math.random() * totalTracks);
-        selectedTrack = tracks[randomIndex];
-      } else {
-        const topTracks = tracks.slice(0, 15);
-        const weights = topTracks.map((_, index) => Math.pow(0.85, index));
-        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-        
-        let random = Math.random() * totalWeight;
-        let selectedIndex = 0;
-        
-        for (let i = 0; i < weights.length; i++) {
-          random -= weights[i];
-          if (random <= 0) {
-            selectedIndex = i;
-            break;
-          }
-        }
-        
-        selectedTrack = topTracks[selectedIndex];
-      }
+      // Prendi sempre la prima canzone (migliore match) per consistenza
+      // Se l'utente non è soddisfatto, può usare "Non mi piace" per variare
+      selectedTrack = tracks[0];
       
       const explanation = generateExplanation(selectedTrack, answers, tags);
       const audioFeatures = getAudioFeaturesFromMood(answers);
@@ -392,7 +372,32 @@ const MusicMoodMatcher = () => {
     
     setTimeout(async () => {
       try {
-        const match = await findBestMatch();
+        // Per il retry, aggiungi un po' di casualità per variare i risultati
+        const tags = getMoodBasedTags(answers);
+        const tracks = await searchSpotify(tags);
+        
+        if (tracks.length === 0) {
+          throw new Error('Nessuna canzone trovata');
+        }
+        
+        // Per il retry, prendi una canzone diversa dalla top 10
+        const topTracks = tracks.slice(0, Math.min(10, tracks.length));
+        const randomIndex = Math.floor(Math.random() * topTracks.length);
+        const selectedTrack = topTracks[randomIndex];
+        
+        const explanation = generateExplanation(selectedTrack, answers, tags);
+        const audioFeatures = getAudioFeaturesFromMood(answers);
+        const popularityScore = selectedTrack.popularity || 50;
+        const confidence = Math.min(95, 70 + Math.floor(popularityScore / 5) + Math.floor(Math.random() * 15));
+
+        const match = {
+          ...selectedTrack,
+          reason: explanation,
+          tags: tags,
+          confidence: confidence,
+          audioFeatures: audioFeatures
+        };
+        
         setRecommendation(match);
         setIsAnalyzing(false);
       } catch (err) {
