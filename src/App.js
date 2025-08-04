@@ -1,24 +1,4 @@
-import React, { useState } from 'react';
-import { Music, Brain, Heart, Play, RotateCcw, Sparkles, Headphones, ExternalLink, ChevronRight } from 'lucide-react';
-
-// POI tutto il resto del codice dall'artifact
-const MusicMoodMatcher = () => {
-// Database locale ricchissimo con canzoni Spotify vere
-  const getMusicDatabase = () => {
-    return {
-      // ELECTRONIC
-      electronic: {
-        happy: [
-          { name: "One More Time", artist: "Daft Punk", url: "https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV", popularity: 88 },
-          { name: "Levels", artist: "Avicii", url: "https://open.spotify.com/track/2ZUgEgKZa5zR5FJ6hRG3gq", popularity: 85 },
-          { name: "Titanium", artist: "David Guetta ft. Sia", url: "https://open.spotify.com/track/3WdO8rWrGEvXbhUNiGbGTG", popularity: 89 },
-          { name: "Clarity", artist: "Zedd ft. Foxes", url: "https://open.spotify.com/track/2L8XZ2Wb9b8uPb1sQhJp5d", popularity: 82 },
-          { name: "Bangarang", artist: "Skrillex", url: "https://open.spotify.com/track/2Iv9c8F9G2dQzn5upmxJPr", popularity: 78 }
-        ],
-        calm: [
-          { name: "Strobe", artist: "Deadmau5", url: "https://open.spotify.com/track/2DGa7iaidT5s0qnINlwMjJ", popularity: 85 },
-          { name: "Porcelain", artist: "Moby", url: "https://open.spotify.com/track/5UYlSWZVNTJqhH5uPYBpqH", popularity: 72 },
-          { name: "import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Music, Brain, Heart, Play, RotateCcw, Sparkles, Headphones, ExternalLink, ChevronRight } from 'lucide-react';
 
 const MusicMoodMatcher = () => {
@@ -164,169 +144,63 @@ const MusicMoodMatcher = () => {
     return [...new Set(allTags)].slice(0, 5);
   };
 
-  // Ottieni token di accesso Spotify con proxy CORS
-  const getSpotifyToken = async () => {
+  // Chiamata alla Netlify Function invece delle API dirette
+  const searchSpotify = async (tags) => {
     try {
-      // Usa proxy CORS per bypassare le restrizioni del browser
-      const corsProxy = 'https://cors-anywhere.herokuapp.com/';
-      const tokenUrl = corsProxy + 'https://accounts.spotify.com/api/token';
+      console.log(`🎵 Chiamando Netlify Function con mood: ${answers.mood}, genre: ${answers.genre}`);
       
-      const response = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET),
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: 'grant_type=client_credentials'
+      // Costruisci i parametri per la function
+      const params = new URLSearchParams({
+        mood: answers.mood || 'happy',
+        activity: answers.activity || 'relaxing',
+        energy: answers.energy || 'medium',
+        time: answers.time || 'evening',
+        genre: answers.genre || 'pop',
+        tags: tags.join(',')
       });
-
+      
+      // Chiama la Netlify Function
+      const response = await fetch(`/api/spotify?${params}`);
+      
       if (!response.ok) {
-        throw new Error(`Token request failed: ${response.status}`);
+        throw new Error(`Function error: ${response.status}`);
       }
-
+      
       const data = await response.json();
-      return data.access_token;
+      
+      if (data.tracks && data.tracks.length > 0) {
+        console.log(`✅ Netlify Function: trovate ${data.tracks.length} canzoni`);
+        return data.tracks.map(track => ({
+          ...track,
+          score: Math.random() * 100 + (track.popularity || 50)
+        }));
+      }
+      
+      throw new Error('Nessuna canzone trovata dalla function');
+      
     } catch (error) {
-      console.error('Errore nel token Spotify:', error);
-      // Fallback a database locale se proxy non funziona
-      throw new Error('Spotify API non disponibile, usando database locale');
+      console.error('Errore nella Netlify Function:', error);
+      
+      // Fallback locale minimo (solo per test)
+      console.log('🔄 Usando fallback locale...');
+      return getFallbackTracks();
     }
   };
 
-  // Ricerca intelligente con Spotify API
-  const searchSpotify = async (tags) => {
-    try {
-      const token = await getSpotifyToken();
-      
-      console.log(`🎵 Cercando su Spotify con tags: [${tags.join(', ')}]`);
-      
-      let allTracks = [];
-      
-      // Strategia 1: Cerca per generi Spotify ufficiali  
-      const spotifyGenres = {
-        electronic: ['electronic', 'house', 'techno', 'edm'],
-        pop: ['pop', 'dance-pop', 'electropop'],
-        rock: ['rock', 'indie-rock', 'alternative-rock'],
-        'hip-hop': ['hip-hop', 'rap', 'trap'],
-        jazz: ['jazz', 'smooth-jazz', 'jazz-fusion'],
-        classical: ['classical', 'piano', 'orchestral'],
-        indie: ['indie', 'indie-pop', 'folk'],
-        metal: ['metal', 'hard-rock', 'heavy-metal'],
-        reggae: ['reggae', 'ska', 'dub'],
-        country: ['country', 'folk', 'americana'],
-        latin: ['latin', 'reggaeton', 'salsa'],
-        ambient: ['ambient', 'chill', 'downtempo']
-      };
-      
-      // Determina il genere principale dalle risposte
-      let mainGenre = 'pop'; // default
-      if (answers.genre && spotifyGenres[answers.genre]) {
-        mainGenre = answers.genre;
-      }
-      
-      // Cerca con Recommendations API (la più potente!)
-      try {
-        const seedGenres = spotifyGenres[mainGenre].slice(0, 2); // Max 2 seed genres
-        const audioFeatures = getAudioFeaturesFromMood(answers);
-        
-        const recommendationsUrl = `${SPOTIFY_BASE_URL}/recommendations?${new URLSearchParams({
-          seed_genres: seedGenres.join(','),
-          limit: 30,
-          target_valence: audioFeatures.valence,
-          target_energy: audioFeatures.energy,
-          target_danceability: audioFeatures.danceability,
-          target_tempo: audioFeatures.tempo,
-          min_popularity: 20
-        })}`;
-        
-        console.log('🎯 Spotify Recommendations URL:', recommendationsUrl);
-        
-        const recResponse = await fetch(recommendationsUrl, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (recResponse.ok) {
-          const recData = await recResponse.json();
-          if (recData.tracks && recData.tracks.length > 0) {
-            console.log(`✅ Recommendations: trovate ${recData.tracks.length} canzoni`);
-            allTracks = recData.tracks.map(track => ({
-              name: track.name,
-              artist: track.artists[0].name,
-              url: track.external_urls.spotify,
-              image: track.album.images[1]?.url || track.album.images[0]?.url,
-              preview_url: track.preview_url,
-              popularity: track.popularity,
-              id: track.id,
-              score: Math.random() * 100 + track.popularity
-            }));
-          }
-        }
-      } catch (error) {
-        console.log('❌ Recommendations API failed:', error.message);
-      }
-      
-      // Strategia 2: Search API come fallback
-      if (allTracks.length === 0) {
-        const searchQueries = [
-          `genre:"${mainGenre}" ${tags[0]}`,
-          `genre:"${mainGenre}"`,
-          tags[0],
-          'popular'
-        ];
-        
-        for (const query of searchQueries) {
-          try {
-            const searchUrl = `${SPOTIFY_BASE_URL}/search?q=${encodeURIComponent(query)}&type=track&limit=30`;
-            const searchResponse = await fetch(searchUrl, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (searchResponse.ok) {
-              const searchData = await searchResponse.json();
-              if (searchData.tracks.items.length > 0) {
-                console.log(`✅ Search "${query}": trovate ${searchData.tracks.items.length} canzoni`);
-                allTracks = searchData.tracks.items.map(track => ({
-                  name: track.name,
-                  artist: track.artists[0].name,
-                  url: track.external_urls.spotify,
-                  image: track.album.images[1]?.url || track.album.images[0]?.url,
-                  preview_url: track.preview_url,
-                  popularity: track.popularity,
-                  id: track.id,
-                  score: Math.random() * 100 + track.popularity / 2
-                }));
-                break;
-              }
-            }
-          } catch (error) {
-            console.log(`❌ Search "${query}" failed:`, error.message);
-            continue;
-          }
-        }
-      }
-      
-      // Rimuovi duplicati e ordina per score
-      const uniqueTracks = [];
-      const seen = new Set();
-      
-      for (const track of allTracks) {
-        const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          uniqueTracks.push(track);
-        }
-      }
-      
-      uniqueTracks.sort((a, b) => b.score - a.score);
-      console.log(`🎵 Totale canzoni uniche da Spotify: ${uniqueTracks.length}`);
-      
-      return uniqueTracks;
-      
-    } catch (error) {
-      console.error('Errore nella ricerca Spotify:', error);
-      throw error;
-    }
+  // Fallback minimo per test
+  const getFallbackTracks = () => {
+    const tracks = [
+      { name: "Blinding Lights", artist: "The Weeknd", url: "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b", popularity: 95 },
+      { name: "Levitating", artist: "Dua Lipa", url: "https://open.spotify.com/track/39LLxExYz6ewLAcYrzQQyP", popularity: 90 },
+      { name: "Good 4 U", artist: "Olivia Rodrigo", url: "https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG", popularity: 88 },
+      { name: "Stay", artist: "The Kid LAROI & Justin Bieber", url: "https://open.spotify.com/track/5PjdY0CKGZdEuoNab3yDmX", popularity: 87 },
+      { name: "Industry Baby", artist: "Lil Nas X & Jack Harlow", url: "https://open.spotify.com/track/27NovPIUIRrOZoCHxABJwK", popularity: 86 }
+    ];
+    
+    return tracks.map(track => ({
+      ...track,
+      score: Math.random() * 100 + track.popularity
+    })).sort((a, b) => b.score - a.score);
   };
 
   // Converti mood in audio features per Spotify
@@ -748,7 +622,7 @@ const MusicMoodMatcher = () => {
                     La tua canzone
                   </h2>
                   <div className="text-sm text-gray-500">
-                    Match: {recommendation.confidence}%
+                    Match: {recommendation.confidence}% • Powered by Spotify
                   </div>
                 </div>
 
@@ -777,7 +651,8 @@ const MusicMoodMatcher = () => {
                         {recommendation.artist}
                       </p>
                       <p className="text-sm text-gray-500">
-                        {parseInt(recommendation.playcount).toLocaleString()} plays
+                        {recommendation.popularity ? `${recommendation.popularity}% popularity` : 'Spotify Track'}
+                        {recommendation.preview_url && ' • Preview disponibile'}
                       </p>
                     </div>
                   </div>
@@ -804,24 +679,29 @@ const MusicMoodMatcher = () => {
 
                   {/* Bottoni azione */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <a
+                    
                       href={recommendation.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors font-medium"
-                    >
-                      <ExternalLink className="w-5 h-5" />
-                      Last.fm
-                    </a>
-                    <a
-                      href={`https://open.spotify.com/search/${encodeURIComponent(recommendation.name + ' ' + recommendation.artist)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
                     >
                       <Play className="w-5 h-5" />
-                      Spotify
+                      Apri su Spotify
                     </a>
+                    {recommendation.preview_url ? (
+                      <audio
+                        controls
+                        src={recommendation.preview_url}
+                        className="w-full h-12 rounded-xl"
+                        style={{ filter: 'sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%)' }}
+                      >
+                        Il tuo browser non supporta l'audio.
+                      </audio>
+                    ) : (
+                      <div className="flex items-center justify-center px-6 py-4 bg-gray-100 text-gray-500 rounded-xl">
+                        <span className="text-sm">Preview non disponibile</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
