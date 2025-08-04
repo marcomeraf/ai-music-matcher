@@ -195,12 +195,31 @@ const MusicMoodMatcher = () => {
 
   // Fallback locale
   const getFallbackTracks = () => {
-    ];
-    
-    return tracks.map(track => ({
+        artist: 'Harry Styles',
+      setPlaylist(finalPlaylist);
+    } catch (error) {
+      console.error('Errore nella generazione playlist:', error);
+      setError('Errore nella generazione della playlist. Riprova!');
+    } finally {
+      setIsGeneratingPlaylist(false);
+    }
+  };
+
+        url: 'https://open.spotify.com/track/6UelLqGlWMcVH1E5c4H7lY',
+        image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&h=300&fit=crop',
+        popularity: 88
+      },
+      {
+        id: 'fallback-3',
+        name: 'Good 4 U',
+        artist: 'Olivia Rodrigo',
+        url: 'https://open.spotify.com/track/4ZtFanR9U6ndgddUvNcjcG',
+        image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&h=300&fit=crop',
+        popularity: 92
+      }
       ...track,
       score: Math.random() * 100 + track.popularity
-    })).sort((a, b) => b.score - a.score);
+        return data.tracks.map(track => ({
   };
 
   // Audio features
