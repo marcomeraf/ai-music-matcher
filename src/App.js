@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Music, Brain, Heart, Play, RotateCcw, Sparkles, Headphones, ExternalLink, ChevronRight } from 'lucide-react';
+import { Music, Brain, Heart, Play, RotateCcw, Sparkles, Headphones, ExternalLink, ChevronRight, List, ArrowLeft } from 'lucide-react';
 
 const MusicMoodMatcher = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -9,6 +9,9 @@ const MusicMoodMatcher = () => {
   const [showResult, setShowResult] = useState(false);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [playlist, setPlaylist] = useState(null);
+  const [isGeneratingPlaylist, setIsGeneratingPlaylist] = useState(false);
+  const [showPlaylist, setShowPlaylist] = useState(false);
 
   const questions = [
     {
@@ -348,6 +351,56 @@ const MusicMoodMatcher = () => {
     }
   };
 
+  const generatePlaylist = async () => {
+    if (!recommendation || !recommendation.id) {
+      setError('Impossibile generare playlist senza una canzone di base');
+      return;
+    }
+    
+    setIsGeneratingPlaylist(true);
+    setError(null);
+    
+    try {
+      console.log('🎵 Generando playlist basata su:', recommendation.name);
+      
+      const params = new URLSearchParams({
+        action: 'generate_playlist',
+        trackId: recommendation.id,
+        trackArtist: recommendation.artist,
+        trackGenre: answers.genre || 'pop',
+        mood: answers.mood || 'happy',
+        activity: answers.activity || 'relaxing',
+        energy: answers.energy || 'medium'
+      });
+      
+      const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
+      console.log('🔗 Chiamando per playlist:', apiUrl);
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Errore nella generazione: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.playlist && data.playlist.length > 0) {
+        setPlaylist(data.playlist);
+        setShowPlaylist(true);
+        console.log(`✅ Playlist generata: ${data.playlist.length} canzoni`);
+      } else {
+        throw new Error('Nessuna canzone trovata per la playlist');
+      }
+      
+    } catch (error) {
+      console.error('Errore generazione playlist:', error);
+      setError('Errore nella generazione della playlist. Riprova!');
+    } finally {
+      setIsGeneratingPlaylist(false);
+    }
+  };
+
   const quickRetry = async () => {
     setIsAnalyzing(true);
     setError(null);
@@ -373,6 +426,9 @@ const MusicMoodMatcher = () => {
     setIsAnalyzing(false);
     setError(null);
     setRetryCount(0);
+    setPlaylist(null);
+    setShowPlaylist(false);
+    setIsGeneratingPlaylist(false);
   };
 
   const currentQuestion = questions[currentStep];
@@ -618,6 +674,23 @@ const MusicMoodMatcher = () => {
                       <Play className="w-5 h-5" />
                       Apri su Spotify
                     </a>
+                    <button
+                      onClick={generatePlaylist}
+                      disabled={isGeneratingPlaylist}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white rounded-xl transition-colors font-medium col-span-full"
+                    >
+                      {isGeneratingPlaylist ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Generando...
+                        </>
+                      ) : (
+                        <>
+                          <List className="w-5 h-5" />
+                          Genera Playlist (15 canzoni)
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -638,6 +711,106 @@ const MusicMoodMatcher = () => {
                     <Sparkles className="w-5 h-5" />
                     Nuovo quiz
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPlaylist && playlist && (
+          <div className="max-w-4xl mx-auto mt-8">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-8">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-3xl font-light text-gray-900 mb-2">
+                      La tua playlist
+                    </h2>
+                    <p className="text-gray-600">
+                      {playlist.length} canzoni basate su "{recommendation.name}"
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowPlaylist(false)}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Indietro
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {playlist.map((track, index) => (
+                    <div key={`${track.id}-${index}`} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                      <div className="flex-shrink-0 w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center text-sm font-medium text-gray-600">
+                        {index + 1}
+                      </div>
+                      
+                      {track.image ? (
+                        <img 
+                          src={track.image} 
+                          alt={`${track.name} cover`}
+                          className="w-12 h-12 rounded-lg object-cover"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center ${track.image ? 'hidden' : ''}`}>
+                        <Music className="w-5 h-5 text-gray-600" />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate">
+                          {track.name}
+                        </h3>
+                        <p className="text-sm text-gray-600 truncate">
+                          {track.artist}
+                        </p>
+                      </div>
+                      
+                      <div className="flex-shrink-0">
+                        <a
+                          href={track.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center w-10 h-10 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                        >
+                          <Play className="w-4 h-4" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      onClick={generatePlaylist}
+                      disabled={isGeneratingPlaylist}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-purple-100 hover:bg-purple-200 disabled:bg-purple-50 text-purple-800 rounded-xl transition-colors font-medium"
+                    >
+                      {isGeneratingPlaylist ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                          Generando...
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-5 h-5" />
+                          Nuova Playlist
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={resetQuiz}
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl transition-colors font-medium"
+                    >
+                      <Sparkles className="w-5 h-5" />
+                      Nuovo Quiz
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

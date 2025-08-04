@@ -252,12 +252,240 @@ const buildRecommendationParams = (genreProfile, moodFeatures) => {
   return { ...params, ...combinedFeatures };
 };
 
+// Nuova funzione per generare playlist basata su una canzone
+const generatePlaylistFromTrack = async (token, trackId, trackArtist, trackGenre, answers) => {
+  try {
+    console.log(`🎵 Generando playlist basata su track ID: ${trackId}`);
+    
+    // Ottieni audio features della canzone base
+    const audioFeaturesUrl = `https://api.spotify.com/v1/audio-features/${trackId}`;
+    const audioResponse = await fetch(audioFeaturesUrl, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    let baseFeatures = {};
+    if (audioResponse.ok) {
+      const audioData = await audioResponse.json();
+      baseFeatures = {
+        target_energy: audioData.energy,
+        target_valence: audioData.valence,
+        target_danceability: audioData.danceability,
+        target_acousticness: audioData.acousticness,
+        target_tempo: audioData.tempo
+      };
+      console.log('🎼 Audio features della canzone base:', baseFeatures);
+    }
+    
+    const genreProfile = genreProfiles[trackGenre] || genreProfiles['pop'];
+    let playlistTracks = [];
+    
+    // STRATEGIA 1: Recommendations basate sulla canzone specifica
+    try {
+      const recParams = {
+        seed_tracks: trackId,
+        limit: 20,
+        ...baseFeatures,
+        // Aggiungi un po' di varietà
+        min_popularity: 20
+      };
+      
+      const recommendationsUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(recParams)}`;
+      const recResponse = await fetch(recommendationsUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (recResponse.ok) {
+        const recData = await recResponse.json();
+        if (recData.tracks && recData.tracks.length > 0) {
+          playlistTracks = recData.tracks.map(track => ({
+            name: track.name,
+            artist: track.artists[0].name,
+            url: track.external_urls.spotify,
+            image: track.album.images[1]?.url || track.album.images[0]?.url,
+            popularity: track.popularity,
+            id: track.id,
+            source: 'track-based-recommendations'
+          }));
+          console.log(`✅ Track-based recommendations: ${playlistTracks.length} canzoni`);
+        }
+      }
+    } catch (error) {
+      console.log('❌ Track-based recommendations error:', error.message);
+    }
+    
+    // STRATEGIA 2: Recommendations basate sull'artista
+    if (playlistTracks.length < 15) {
+      try {
+        // Cerca l'artista per ottenere l'ID
+        const artistSearchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(trackArtist)}&type=artist&limit=1`;
+        const artistResponse = await fetch(artistSearchUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (artistResponse.ok) {
+          const artistData = await artistResponse.json();
+          if (artistData.artists.items.length > 0) {
+            const artistId = artistData.artists.items[0].id;
+            
+            const artistRecParams = {
+              seed_artists: artistId,
+              seed_genres: genreProfile.seeds.slice(0, 1).join(','),
+              limit: 15,
+              min_popularity: 15
+            };
+            
+            const artistRecUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(artistRecParams)}`;
+            const artistRecResponse = await fetch(artistRecUrl, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (artistRecResponse.ok) {
+              const artistRecData = await artistRecResponse.json();
+              const artistTracks = artistRecData.tracks.map(track => ({
+                name: track.name,
+                artist: track.artists[0].name,
+                url: track.external_urls.spotify,
+                image: track.album.images[1]?.url || track.album.images[0]?.url,
+                popularity: track.popularity,
+                id: track.id,
+                source: 'artist-based-recommendations'
+              }));
+              
+              playlistTracks = [...playlistTracks, ...artistTracks];
+              console.log(`✅ Artist-based recommendations: ${artistTracks.length} canzoni aggiunte`);
+            }
+          }
+        }
+      } catch (error) {
+        console.log('❌ Artist-based recommendations error:', error.message);
+      }
+    }
+    
+    // STRATEGIA 3: Genre-based recommendations se ancora non abbiamo abbastanza
+    if (playlistTracks.length < 15) {
+      try {
+        const genreRecParams = {
+          seed_genres: genreProfile.seeds.slice(0, 2).join(','),
+          limit: 20,
+          ...genreProfile.audioFeatures,
+          min_popularity: 10
+        };
+        
+        const genreRecUrl = `https://api.spotify.com/v1/recommendations?${new URLSearchParams(genreRecParams)}`;
+        const genreRecResponse = await fetch(genreRecUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (genreRecResponse.ok) {
+          const genreRecData = await genreRecResponse.json();
+          const genreTracks = genreRecData.tracks.map(track => ({
+            name: track.name,
+            artist: track.artists[0].name,
+            url: track.external_urls.spotify,
+            image: track.album.images[1]?.url || track.album.images[0]?.url,
+            popularity: track.popularity,
+            id: track.id,
+            source: 'genre-based-recommendations'
+          }));
+          
+          playlistTracks = [...playlistTracks, ...genreTracks];
+          console.log(`✅ Genre-based recommendations: ${genreTracks.length} canzoni aggiunte`);
+        }
+      } catch (error) {
+        console.log('❌ Genre-based recommendations error:', error.message);
+      }
+    }
+    
+    // Rimuovi duplicati e la canzone originale
+    const uniqueTracks = [];
+    const seen = new Set();
+    seen.add(trackId); // Escludi la canzone originale
+    
+    for (const track of playlistTracks) {
+      const key = `${track.name.toLowerCase()}-${track.artist.toLowerCase()}`;
+      if (!seen.has(key) && !seen.has(track.id) && track.popularity >= 5) {
+        seen.add(key);
+        seen.add(track.id);
+        uniqueTracks.push(track);
+      }
+    }
+    
+    // Ordina per rilevanza e popolarità
+    uniqueTracks.sort((a, b) => {
+      const sourceWeight = {
+        'track-based-recommendations': 100,
+        'artist-based-recommendations': 80,
+        'genre-based-recommendations': 60
+      };
+      
+      const aWeight = sourceWeight[a.source] || 0;
+      const bWeight = sourceWeight[b.source] || 0;
+      
+      if (aWeight !== bWeight) return bWeight - aWeight;
+      return (b.popularity || 0) - (a.popularity || 0);
+    });
+    
+    // Prendi le prime 15
+    const finalPlaylist = uniqueTracks.slice(0, 15);
+    
+    console.log(`🎵 Playlist generata: ${finalPlaylist.length} canzoni`);
+    return finalPlaylist;
+    
+  } catch (error) {
+    console.error('❌ Errore nella generazione playlist:', error);
+    throw error;
+  }
+};
+
 exports.handler = async (event, context) => {
   try {
     console.log('🎵 === SPOTIFY FUNCTION START (ENHANCED) ===');
     console.log('📥 Parametri ricevuti:', event.queryStringParameters);
     
     const answers = event.queryStringParameters || {};
+    
+    // Controlla se è una richiesta per generare playlist
+    if (answers.action === 'generate_playlist') {
+      console.log('🎵 === GENERAZIONE PLAYLIST ===');
+      
+      // Ottieni token Spotify
+      const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+        },
+        body: 'grant_type=client_credentials'
+      });
+      
+      if (!tokenResponse.ok) {
+        throw new Error(`Token request failed: ${tokenResponse.status}`);
+      }
+      
+      const tokenData = await tokenResponse.json();
+      const token = tokenData.access_token;
+      
+      const playlist = await generatePlaylistFromTrack(
+        token,
+        answers.trackId,
+        answers.trackArtist,
+        answers.trackGenre,
+        answers
+      );
+      
+      return {
+        statusCode: 200,
+        headers: { 
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          playlist: playlist,
+          message: `Generated playlist with ${playlist.length} tracks`,
+          success: true
+        })
+      };
+    }
     
     // Ottieni token Spotify
     console.log('🔑 Richiedendo token Spotify...');
