@@ -585,7 +585,6 @@ const MusicMoodMatcher = () => {
                       </p>
                       <p className="text-sm text-gray-500">
                         {recommendation.popularity ? `${recommendation.popularity}% popularity` : 'Spotify Track'}
-                        {recommendation.preview_url && ' • Preview disponibile'}
                       </p>
                     </div>
                   </div>
@@ -614,25 +613,11 @@ const MusicMoodMatcher = () => {
                       href={recommendation.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium"
+                      className="flex items-center justify-center gap-3 px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors font-medium col-span-full"
                     >
                       <Play className="w-5 h-5" />
                       Apri su Spotify
                     </a>
-                    {recommendation.preview_url ? (
-                      <audio
-                        controls
-                        src={recommendation.preview_url}
-                        className="w-full h-12 rounded-xl"
-                        style={{ filter: 'sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%)' }}
-                      >
-                        Il tuo browser non supporta l'audio.
-                      </audio>
-                    ) : (
-                      <div className="flex items-center justify-center px-6 py-4 bg-gray-100 text-gray-500 rounded-xl">
-                        <span className="text-sm">Preview non disponibile</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
