@@ -264,12 +264,57 @@ const MusicMoodMatcher = () => {
         throw new Error('Nessuna canzone trovata');
       }
 
-      const totalTracks = tracks.length;
-      let selectedTrack;
+      // Algoritmo di scoring intelligente
+      const scoredTracks = tracks.map(track => {
+        let score = 0;
+        
+        // 1. PRIORITÀ GENERE (peso maggiore)
+        const sourceWeights = {
+          'recommendations-enhanced': 100,
+          'recommendations-basic': 80,
+          'search-genre-specific': 90,
+          'artist-based-recommendations': 85,
+          'genre-based-recommendations': 75,
+          'search-fallback': 40,
+          'search-generic': 30
+        };
+        score += sourceWeights[track.source] || 50;
+        
+        // 2. BONUS GENERE MATCH
+        if (track.genres && track.genres.some(g => g.includes(answers.genre))) {
+          score += 25;
+        }
+        
+        // 3. MOOD COMPATIBILITY
+        if (answers.mood === 'happy' && track.popularity > 60) score += 10;
+        if (answers.mood === 'calm' && track.popularity < 70) score += 15;
+        if (answers.mood === 'melancholic' && track.popularity < 60) score += 20;
+        if (answers.mood === 'motivated' && track.popularity > 50) score += 10;
+        
+        // 4. ACTIVITY MATCH
+        if (answers.activity === 'exercising' && track.popularity > 40) score += 8;
+        if (answers.activity === 'relaxing' && track.popularity < 80) score += 12;
+        if (answers.activity === 'working' && track.popularity > 30 && track.popularity < 90) score += 10;
+        
+        // 5. POPOLARITÀ (peso ridotto)
+        score += (track.popularity || 0) * 0.15; // Molto meno peso alla popolarità
+        
+        // 6. PENALITÀ PER CANZONI TROPPO MAINSTREAM
+        if (track.popularity > 85) score -= 20;
+        
+        // 7. BONUS DIVERSITÀ (per retry)
+        if (retryCount > 0) {
+          score += Math.random() * 30; // Aggiunge casualità nei retry
+        }
+        
+        return { ...track, score };
+      });
       
-      // Prendi sempre la prima canzone (migliore match) per consistenza
-      // Se l'utente non è soddisfatto, può usare "Non mi piace" per variare
-      selectedTrack = tracks[0];
+      // Ordina per score (non per popolarità)
+      scoredTracks.sort((a, b) => b.score - a.score);
+      
+      // Prendi la canzone con score più alto
+      const selectedTrack = scoredTracks[0];
       
       // Log per debug del genere
       console.log(`🎯 Genere richiesto: ${answers.genre}`);
@@ -392,7 +437,6 @@ const MusicMoodMatcher = () => {
     
     setTimeout(async () => {
       try {
-        // Per il retry, aggiungi un po' di casualità per variare i risultati
         const tags = getMoodBasedTags(answers);
         const tracks = await searchSpotify(tags);
         
@@ -400,15 +444,45 @@ const MusicMoodMatcher = () => {
           throw new Error('Nessuna canzone trovata');
         }
         
-        // Per il retry, prendi una canzone diversa dalla top 10
-        const topTracks = tracks.slice(0, Math.min(10, tracks.length));
-        const randomIndex = Math.floor(Math.random() * topTracks.length);
-        const selectedTrack = topTracks[randomIndex];
+        // Algoritmo di scoring con più casualità per il retry
+        const scoredTracks = tracks.map(track => {
+          let score = 0;
+          
+          const sourceWeights = {
+            'recommendations-enhanced': 100,
+            'recommendations-basic': 80,
+            'search-genre-specific': 90,
+            'artist-based-recommendations': 85,
+            'genre-based-recommendations': 75,
+            'search-fallback': 40,
+            'search-generic': 30
+          };
+          score += sourceWeights[track.source] || 50;
+          
+          if (track.genres && track.genres.some(g => g.includes(answers.genre))) {
+            score += 25;
+          }
+          
+          // MAGGIORE CASUALITÀ NEL RETRY
+          score += Math.random() * 50; // Più casualità
+          score += (track.popularity || 0) * 0.1; // Ancora meno peso alla popolarità
+          
+          // Penalità per canzoni troppo mainstream
+          if (track.popularity > 90) score -= 30;
+          
+          return { ...track, score };
+        });
+        
+        scoredTracks.sort((a, b) => b.score - a.score);
+        
+        // Nel retry, prendi una delle top 5 invece che sempre la prima
+        const topCandidates = scoredTracks.slice(0, 5);
+        const randomIndex = Math.floor(Math.random() * topCandidates.length);
+        const selectedTrack = topCandidates[randomIndex];
         
         const explanation = generateExplanation(selectedTrack, answers, tags);
         const audioFeatures = getAudioFeaturesFromMood(answers);
-        const popularityScore = selectedTrack.popularity || 50;
-        const confidence = Math.min(95, 70 + Math.floor(popularityScore / 5) + Math.floor(Math.random() * 15));
+        const confidence = Math.min(95, 70 + Math.floor(selectedTrack.score / 10) + Math.floor(Math.random() * 15));
 
         const match = {
           ...selectedTrack,
