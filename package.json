@@ -2,7 +2,7 @@
   "name": "ai-music-matcher",
   "version": "1.0.0",
   "scripts": {
-    "start": "npx netlify dev",
+    "build": "react-scripts build",
     "start": "react-scripts start"
   },
   "dependencies": {

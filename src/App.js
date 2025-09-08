@@ -156,7 +156,7 @@ const MusicMoodMatcher = () => {
         tags: tags.join(',')
       });
       
-      const apiUrl = `${window.location.origin}/api/spotify?${params}`;
+      const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
       console.log('🔗 Chiamando:', apiUrl);
       
       const response = await fetch(apiUrl);
@@ -345,7 +345,7 @@ const MusicMoodMatcher = () => {
         energy: answers.energy || 'medium'
       });
       
-      const apiUrl = `${window.location.origin}/api/spotify?${params}`;
+      const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
       console.log('🔗 URL playlist:', apiUrl);
       
       const response = await fetch(apiUrl);
@@ -401,31 +401,9 @@ const MusicMoodMatcher = () => {
         }
         
         // Per il retry, prendi una canzone diversa dalla top 10
-        const scoredTracks = tracks.map(track => {
-          let score = 0;
-          
-          const sourceWeights = {
-            'recommendations-enhanced': 100,
-            'recommendations-basic': 80,
-            'search-genre-specific': 90,
-            'search-generic': 40
-          };
-          score += sourceWeights[track.source] || 50;
-          
-          if (track.genres && track.genres.some(g => g.includes(answers.genre))) {
-            score += 20;
-          }
-          
-          score += (track.popularity || 0) * 0.1;
-          
-          // Aggiungi casualità per il retry
-          score += Math.random() * 10;
-          
-          return { ...track, finalScore: score };
-        });
-        
-        scoredTracks.sort((a, b) => b.finalScore - a.finalScore);
-        const selectedTrack = scoredTracks[0];
+        const topTracks = tracks.slice(0, Math.min(10, tracks.length));
+        const randomIndex = Math.floor(Math.random() * topTracks.length);
+        const selectedTrack = topTracks[randomIndex];
         
         const explanation = generateExplanation(selectedTrack, answers, tags);
         const audioFeatures = getAudioFeaturesFromMood(answers);
