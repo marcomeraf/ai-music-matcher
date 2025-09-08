@@ -156,7 +156,7 @@ const MusicMoodMatcher = () => {
         tags: tags.join(',')
       });
       
-      const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
+      const apiUrl = `${window.location.origin}/api/spotify?${params}`;
       console.log('🔗 Chiamando:', apiUrl);
       
       const response = await fetch(apiUrl);
@@ -345,7 +345,7 @@ const MusicMoodMatcher = () => {
         energy: answers.energy || 'medium'
       });
       
-      const apiUrl = `${window.location.origin}/.netlify/functions/spotify?${params}`;
+      const apiUrl = `${window.location.origin}/api/spotify?${params}`;
       console.log('🔗 URL playlist:', apiUrl);
       
       const response = await fetch(apiUrl);
