@@ -27,6 +27,49 @@ const MusicMoodMatcher = () => {
         { value: 'nostalgic', label: 'Nostalgico', subtitle: 'Ricordi e emozioni del passato', emoji: '✨' }
       ]
     },
+
+  // Funzione per verificare se una canzone appartiene al genere richiesto
+  const checkGenreMatch = (track, requestedGenre) => {
+    if (!requestedGenre) return true;
+    
+    const genreKeywords = {
+      electronic: ['electronic', 'edm', 'house', 'techno', 'trance', 'dubstep', 'electro', 'synth'],
+      pop: ['pop', 'mainstream', 'radio', 'chart', 'hit'],
+      rock: ['rock', 'alternative', 'indie rock', 'guitar', 'grunge', 'punk'],
+      'hip-hop': ['hip hop', 'rap', 'trap', 'urban', 'rnb', 'r&b'],
+      jazz: ['jazz', 'smooth', 'bebop', 'fusion', 'blues', 'swing'],
+      classical: ['classical', 'orchestra', 'piano', 'symphony', 'baroque', 'romantic'],
+      indie: ['indie', 'independent', 'alternative', 'folk', 'bedroom'],
+      metal: ['metal', 'heavy', 'death', 'black', 'metalcore', 'hardcore'],
+      reggae: ['reggae', 'ska', 'dub', 'caribbean', 'dancehall'],
+      country: ['country', 'folk', 'americana', 'bluegrass', 'western'],
+      latin: ['latin', 'salsa', 'reggaeton', 'bossa', 'tango', 'mariachi'],
+      ambient: ['ambient', 'chill', 'atmospheric', 'meditation', 'new age', 'drone']
+    };
+    
+    const keywords = genreKeywords[requestedGenre] || [requestedGenre];
+    
+    // Controlla nel source (priorità massima)
+    if (track.source && track.source.includes('genre') || track.source.includes('recommendations')) {
+      return true; // Se viene da recommendations/genre-based, è già filtrato
+    }
+    
+    // Controlla nei generi dell'artista
+    if (track.genres && track.genres.length > 0) {
+      const hasGenreMatch = track.genres.some(genre => 
+        keywords.some(keyword => genre.toLowerCase().includes(keyword.toLowerCase()))
+      );
+      if (hasGenreMatch) return true;
+    }
+    
+    // Controlla nel nome della canzone e artista (fallback)
+    const trackText = `${track.name} ${track.artist}`.toLowerCase();
+    const hasTextMatch = keywords.some(keyword => 
+      trackText.includes(keyword.toLowerCase())
+    );
+    
+    return hasTextMatch;
+  };
     {
       id: 'activity',
       question: "Cosa stai facendo?",
@@ -268,7 +311,13 @@ const MusicMoodMatcher = () => {
       const scoredTracks = tracks.map(track => {
         let score = 0;
         
-        // 1. PRIORITÀ GENERE (peso maggiore)
+        // 1. FILTRO GENERE OBBLIGATORIO - Se non matcha il genere, score = 0
+        const genreMatch = checkGenreMatch(track, answers.genre);
+        if (!genreMatch) {
+          return { ...track, score: 0 }; // Escludi completamente
+        }
+        
+        // 2. PRIORITÀ SOURCE (peso maggiore)
         const sourceWeights = {
           'recommendations-enhanced': 100,
           'recommendations-basic': 80,
@@ -280,29 +329,27 @@ const MusicMoodMatcher = () => {
         };
         score += sourceWeights[track.source] || 50;
         
-        // 2. BONUS GENERE MATCH
-        if (track.genres && track.genres.some(g => g.includes(answers.genre))) {
-          score += 25;
-        }
+        // 3. BONUS GENERE MATCH (già verificato sopra)
+        score += 50; // Bonus automatico per genere corretto
         
-        // 3. MOOD COMPATIBILITY
+        // 4. MOOD COMPATIBILITY
         if (answers.mood === 'happy' && track.popularity > 60) score += 10;
         if (answers.mood === 'calm' && track.popularity < 70) score += 15;
         if (answers.mood === 'melancholic' && track.popularity < 60) score += 20;
         if (answers.mood === 'motivated' && track.popularity > 50) score += 10;
         
-        // 4. ACTIVITY MATCH
+        // 5. ACTIVITY MATCH
         if (answers.activity === 'exercising' && track.popularity > 40) score += 8;
         if (answers.activity === 'relaxing' && track.popularity < 80) score += 12;
         if (answers.activity === 'working' && track.popularity > 30 && track.popularity < 90) score += 10;
         
-        // 5. POPOLARITÀ (peso ridotto)
+        // 6. POPOLARITÀ (peso ridotto)
         score += (track.popularity || 0) * 0.15; // Molto meno peso alla popolarità
         
-        // 6. PENALITÀ PER CANZONI TROPPO MAINSTREAM
+        // 7. PENALITÀ PER CANZONI TROPPO MAINSTREAM
         if (track.popularity > 85) score -= 20;
         
-        // 7. BONUS DIVERSITÀ (per retry)
+        // 8. BONUS DIVERSITÀ (per retry)
         if (retryCount > 0) {
           score += Math.random() * 30; // Aggiunge casualità nei retry
         }
@@ -310,11 +357,17 @@ const MusicMoodMatcher = () => {
         return { ...track, score };
       });
       
-      // Ordina per score (non per popolarità)
-      scoredTracks.sort((a, b) => b.score - a.score);
+      // Filtra solo canzoni con score > 0 (genere corretto) e ordina
+      const validTracks = scoredTracks.filter(track => track.score > 0);
+      
+      if (validTracks.length === 0) {
+        throw new Error(`Nessuna canzone trovata per il genere "${answers.genre}"`);
+      }
+      
+      validTracks.sort((a, b) => b.score - a.score);
       
       // Prendi la canzone con score più alto
-      const selectedTrack = scoredTracks[0];
+      const selectedTrack = validTracks[0];
       
       // Log per debug del genere
       console.log(`🎯 Genere richiesto: ${answers.genre}`);
