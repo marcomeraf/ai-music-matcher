@@ -13,21 +13,6 @@ const MusicMoodMatcher = () => {
   const [isGeneratingPlaylist, setIsGeneratingPlaylist] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
 
-  const questions = [
-    {
-      id: 'mood',
-      question: "Come ti senti?",
-      subtitle: "Il tuo stato d'animo attuale",
-      emoji: "😊",
-      options: [
-        { value: 'happy', label: 'Felice', subtitle: 'Energico e positivo', emoji: '😄' },
-        { value: 'calm', label: 'Tranquillo', subtitle: 'Rilassato e sereno', emoji: '😌' },
-        { value: 'melancholic', label: 'Pensieroso', subtitle: 'Riflessivo e malinconico', emoji: '🤔' },
-        { value: 'motivated', label: 'Carico', subtitle: 'Motivato e determinato', emoji: '💪' },
-        { value: 'nostalgic', label: 'Nostalgico', subtitle: 'Ricordi e emozioni del passato', emoji: '✨' }
-      ]
-    },
-
   // Funzione per verificare se una canzone appartiene al genere richiesto
   const checkGenreMatch = (track, requestedGenre) => {
     if (!requestedGenre) return true;
@@ -70,6 +55,22 @@ const MusicMoodMatcher = () => {
     
     return hasTextMatch;
   };
+
+  const questions = [
+    {
+      id: 'mood',
+      question: "Come ti senti?",
+      subtitle: "Il tuo stato d'animo attuale",
+      emoji: "😊",
+      options: [
+        { value: 'happy', label: 'Felice', subtitle: 'Energico e positivo', emoji: '😄' },
+        { value: 'calm', label: 'Tranquillo', subtitle: 'Rilassato e sereno', emoji: '😌' },
+        { value: 'melancholic', label: 'Pensieroso', subtitle: 'Riflessivo e malinconico', emoji: '🤔' },
+        { value: 'motivated', label: 'Carico', subtitle: 'Motivato e determinato', emoji: '💪' },
+        { value: 'nostalgic', label: 'Nostalgico', subtitle: 'Ricordi e emozioni del passato', emoji: '✨' }
+      ]
+    },
+
     {
       id: 'activity',
       question: "Cosa stai facendo?",
